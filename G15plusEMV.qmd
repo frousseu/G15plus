@@ -49,7 +49,9 @@ pre {
 
 ```
 
-```{r, echo = FALSE, include=FALSE}
+# Données anciennes
+
+```{r previous, echo = FALSE, include=FALSE, eval = TRUE}
 library(readxl)
 library(data.table)
 library(mgcv)
@@ -124,7 +126,91 @@ l <- l[sapply(l, function(i){
     FALSE
   }
 })] # remove all n = NA or n = NA now
+
+l1 <- l
+
 ```
+
+# Données modifiées
+
+SH et SX -> S0
+<br>
+SR = SNR ?
+
+```{r old, echo = FALSE, include=FALSE}
+library(readxl)
+library(data.table)
+library(mgcv)
+
+options(width = 150)
+options(datatable.print.class = FALSE)
+
+ra <- read_excel("RangSActuel_v2024-10-07.xlsx") |> setDT()
+names(ra)[which(names(ra) == "DATE dernière évaluation Rang S")] <- "date"
+ra[ , bd := "actuel"]
+
+rp <- read_excel("RangSPassé_v2024-10-07.xlsx") |> setDT()
+names(rp)[which(names(rp) == "Ancienne valeur")] <- "SRANK"
+names(rp)[which(names(rp) == "Date ancienne valeur")] <- "date"
+names(rp)[which(names(rp) == "Date changement")] <- "next_date"
+rp[ , bd := "passé"]
+
+keepp <- c("SNAME", "SCOMNAME", "GRANDGROUPE", "GGROUPE", "SRANK", "bd", "date", "next_date")
+keepa <- keepp[-length(keepp)]
+
+r <- rbind(ra[, ..keepa], rp[, ..keepp], fill = TRUE)
+r <- r[order(SNAME, date, rev(bd)), ]
+tab <- rev(sort(table(r$SRANK))); tab
+grep("X", names(tab))
+r[, SRANK := gsub("X", "0", SRANK)] # replace with 0 the worst case
+r[, SRANK := gsub("H", "0", SRANK)]
+
+text <- r$SRANK
+n <- regmatches(text, gregexpr("\\d+", text)) |>
+             sapply(function(i){mean(as.integer(i))})
+n <- ifelse(is.nan(n), NA, n)
+r[, n := n]
+
+
+l <- split(r, r$SNAME) |>
+      lapply(function(x){
+        x[order(SNAME, date, -bd),]
+        x[, date := as.Date(substr(date, 1, 10))]
+        #x[, previous_date := as.Date(substr(previous_date, 1, 10))]
+        y <- tail(x, 1)
+        y[ , date := Sys.Date()]
+        x <- rbind(x, y) # add actual ranks and date
+        #y <- head(x, 1)
+        #y[ , date := previous_date]
+        #x <- rbind(y, x) # add first rank and date
+        x[ , ndiff := n-n[!is.na(n)][1]]
+        x
+      })
+
+l <- l[sapply(l, function(i){
+  #!(all(is.na(i$n)) | is.na(tail(i$n, 1)))
+  w <- which(!is.na(i$date) & !is.na(i$n))
+  if(any(w)){
+    if(nrow(unique(i[w, c("date", "n")])) < 2){
+      FALSE
+    }else{
+      TRUE
+    }
+  }else{
+    FALSE
+  }
+})] # remove all n = NA or n = NA now
+l2 <- l
+sp <- sample(unique(c(names(l1), names(l2))), 1)
+#sp <- "Symphyotrichum boreale"
+l1[[sp]];l2[[sp]];View(rp[SNAME == sp, ]);View(ra[SNAME == sp, ])
+
+```
+
+
+
+
+
 
 ```{r, echo = FALSE}
 mgp <- c(1, 0.25, 0)
@@ -412,7 +498,16 @@ tsrank2 <- function(x, group){
   lines(xout, I1, col = adjustcolor("red", 0.75), lwd = 6)
   lines(xout, I2$diff, col = adjustcolor("gold", 0.75), lwd = 3)
   
-  
+  ####
+  first <- sapply(x, function(i){
+    as.character(i$date[which(!is.na(i$n))[1]])  
+  })
+  rd <- as.character(seq.Date(as.Date("1990-01-01"), Sys.Date(), by = 1))
+  cu <- sapply(rd, function(i){
+    sum(first <= i)  
+  })
+  lines(as.Date(rd), scales::rescale(cu, to = c(-3, -2)), lwd = 2, col = "forestgreen")
+  ####
   
 }  
 
@@ -430,6 +525,19 @@ legend("topleft", inset = 0, legend = c("Espèce", "Moy.", "Moy. pondérée"), c
 par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
 
 ```
+
+
+
+```{r, echo = FALSE, eval = TRUE}
+
+
+
+
+```
+
+
+
+
 
 # Nb d'années écoulée depuis le rang initial vs. l'écart par rapport à ce rang initial
 
@@ -537,7 +645,7 @@ legend("topleft", inset = 0, legend = rev(gsub("S0", "SH/SX", paste0("S", 0:5)))
 
 [Explication des rangs](https://www.quebec.ca/gouvernement/gouvernement-ouvert/transparence-performance/indicateurs-statistiques/donnees-especes-situation-precaire/comprendre-rangs-precarite)
 
-```{r, echo = FALSE, eval = FALSE}
+```{r, echo = FALSE, eval = TRUE}
 ra <- read_excel("RangSActuel_v2024-10-07.xlsx") |> setDT()
 #split(ra, ra$SNAME)
 names(ra)[which(names(ra) == "DATE dernière évaluation Rang S")] <- "date"
@@ -645,4 +753,10 @@ Rangs passés, mais plus de rang actuellement?
 
 ```{r, echo = FALSE}
 l[["Abagrotis brunneipennis"]]
+```
+
+#####
+
+```{r, echo = FALSE}
+l[["Symphyotrichum boreale"]]
 ```

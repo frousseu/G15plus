@@ -48,7 +48,6 @@ pre {
 
 ```
 
-
 ```{r, echo = FALSE, message = FALSE}
 library(jsonlite)
 library(data.table)
@@ -79,9 +78,9 @@ xtot0 <- cbind(years, xtot) |> as.data.frame()
 
 # Données iNaturalist
 
- - Nb d'observateurs élevé depuis environ 2019
- - On ne remontre pas loin dans le temps
- 
+-   Nb d'observateurs élevé depuis environ 2019
+-   On ne remontre pas loin dans le temps
+
 ```{r, echo = FALSE, message = FALSE, out.width = "60%"}
 
 dd <- unique(d, by = c("year", "recordedBy")) |>
@@ -98,11 +97,11 @@ xx <- d[ , .(n = .N), by = .(year)] |>
         _[year %in% 2008:2024, ]
 
 ```
- 
+
 # Données ~~Réseau de suivi ichtyologique (RSI)~~
 
- - Stations regroupées par secteur du Fleuve (~ 3 visites au total par secteur depuis 1995)
- - Peu de réplicats par station (3)
+-   Stations regroupées par secteur du Fleuve (\~ 3 visites au total par secteur depuis 1995)
+-   Peu de réplicats par station (3)
 
 # Taux d'observation des EEE
 
@@ -329,7 +328,6 @@ plotsp <- function(sp){
 
 ```
 
-
 ```{r, echo = FALSE}
 spe <- eeengbif$species[1:12]
 par(mfrow = n2mfrow(length(spe)), mar = c(0, 3, 0, 0), oma = c(4, 4, 4, 4))
@@ -341,7 +339,6 @@ mtext(side = 2, outer = TRUE, line = 2, text = "(Nb d'observations / Nb total) *
 par(mfrow = c(1, 1), mar = c(4, 4, 1, 1), oma = c(0, 0, 0, 0))
 
 ```
-
 
 ## Rééchantillonnage des observateurs avec non EEE
 
@@ -357,8 +354,6 @@ mtext(side = 1, outer = TRUE, line = 2, text = "Années", font = 2)
 mtext(side = 2, outer = TRUE, line = 2, text = "(Nb d'observations / Nb total) * 100", font = 2)
 par(mfrow = c(1, 1), mar = c(4, 4, 1, 1), oma = c(0, 0, 0, 0))
 ```
-
-
 
 # Combiner les espèces
 
@@ -385,7 +380,6 @@ invisible(o <- lapply(sp, function(j){
 
 ```
 
-
 ```{r, echo = FALSE, eval = FALSE}
 
 tab <- rev(sort(table(X$species)))
@@ -411,7 +405,7 @@ invisible(o <- lapply(sp, function(j){
 
 # Avec GAMs plutôt que rééchantillonnage
 
-- Pour avoir une représentation symétrique autour de 1 et éviter les zéros
+-   Pour avoir une représentation symétrique autour de 1 et éviter les zéros
 
 ```{r, echo = FALSE}
 
@@ -469,7 +463,7 @@ invisible(lapply(names(dats), function(sp){
 
 # Taux d'observation global des EEE
 
-- Proportion d'observations de EEE (toutes espèces confondues)
+-   Proportion d'observations de EEE (toutes espèces confondues)
 
 ```{r, echo = FALSE}
 
@@ -554,10 +548,9 @@ plot_observers <- function(x){
 
 ```
 
-
 # Taux d'observation global des espèces communes
 
-- Proportion d'observations des 20 espèces les plus signalées
+-   Proportion d'observations des 20 espèces les plus signalées
 
 ```{r, echo = FALSE}
 
@@ -641,11 +634,9 @@ plot_observers <- function(x){
 
 ```
 
-
-
 # Taux d'observation global des espèces communes
 
-- On enlève es 20 espèces les plus signalées
+-   On enlève es 20 espèces les plus signalées
 
 ```{r, echo = FALSE}
 
@@ -729,13 +720,11 @@ plot_observers <- function(x){
 
 ```
 
+```{r, echo = FALSE}
 
 
 
-
-
-
-
+```
 
 ```{r, echo = FALSE}
 
@@ -743,25 +732,14 @@ plot_observers <- function(x){
 
 ```
 
-
 ```{r, echo = FALSE}
 
 
 
 ```
 
-
 ```{r, echo = FALSE}
 
 
 
 ```
-
-
-```{r, echo = FALSE}
-
-
-
-```
-
-
