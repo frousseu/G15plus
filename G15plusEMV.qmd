@@ -1,0 +1,648 @@
+---
+title: "G15+ / Évolution des rangs de précarité"
+author: ""
+format: 
+   html:
+     fig-width: 9
+     fig-height: 7
+     out-width: 100%
+     page-layout: full
+     self-contained: true
+     toc: true
+     css: styles.css
+resources:
+  - sscripts.js
+editor: visual
+editor_options: 
+  chunk_output_type: console
+execute:
+  cache: false 
+---
+
+```{scss, echo = FALSE, eval = FALSE}
+
+
+.quarto-document img {
+  width: 100%;
+  height: auto;  /* Preserves aspect ratio */
+  max-width: 100%;
+}
+
+h1 {
+  margin-top: 100vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+h2 {
+  margin-top: 25vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+code.r{
+  font-size: 20px;
+}
+pre {
+  font-size: 20px;
+}
+
+```
+
+```{r, echo = FALSE, include=FALSE}
+library(readxl)
+library(data.table)
+library(mgcv)
+
+options(width = 150)
+options(datatable.print.class = FALSE)
+#sp <- "Lampropeltis"
+#(sp <- grep(sp, ra$SNAME, value = TRUE)[1])
+#cat("\014")
+#split(rp, rp$SNAME)[sp]
+#split(ra, ra$SNAME)[sp]
+#l[sp]
+
+
+ra <- read_excel("RangSActuel_v2024-10-07.xlsx") |> setDT()
+#split(ra, ra$SNAME)
+names(ra)[which(names(ra) == "DATE dernière évaluation Rang S")] <- "date"
+ra[ , bd := "actuel"]
+
+rp <- read_excel("RangSPassé_v2024-10-07.xlsx") |> setDT()
+#split(rp, rp$SNAME)
+names(rp)[which(names(rp) == "Ancienne valeur")] <- "SRANK"
+names(rp)[which(names(rp) == "Date ancienne valeur")] <- "previous_date"
+names(rp)[which(names(rp) == "Date changement")] <- "date"
+rp[ , bd := "passé"]
+
+keepp <- c("SNAME", "SCOMNAME", "GRANDGROUPE", "GGROUPE", "SRANK", "bd", "date", "previous_date")
+keepa <- keepp[-length(keepp)]
+
+r <- rbind(ra[, ..keepa], rp[, ..keepp], fill = TRUE)
+r <- r[order(SNAME, date, rev(bd)), ]
+tab <- rev(sort(table(r$SRANK))); tab
+grep("X", names(tab))
+r[, SRANK := gsub("X", "0", SRANK)] # replace with 0 the worst case
+r[, SRANK := gsub("H", "0", SRANK)]
+
+text <- r$SRANK
+n <- regmatches(text, gregexpr("\\d+", text)) |>
+             sapply(function(i){mean(as.integer(i))})
+n <- ifelse(is.nan(n), NA, n)
+r[, n := n]
+
+
+#r <- r[ GRANDGROUPE %in% c("Oiseaux"), ] ### subset according to general group
+
+
+l <- split(r, r$SNAME) |>
+      lapply(function(x){
+        x[order(SNAME, date, -bd),]
+        x[, date := as.Date(substr(date, 1, 10))]
+        x[, previous_date := as.Date(substr(previous_date, 1, 10))]
+        y <- tail(x, 1)
+        y[ , date := Sys.Date()]
+        x <- rbind(x, y) # add actual ranks and date
+        y <- head(x, 1)
+        y[ , date := previous_date]
+        x <- rbind(y, x) # add first rank and date
+        x[ , ndiff := n-n[!is.na(n)][1]]
+        x
+      })
+
+l <- l[sapply(l, function(i){
+  #!(all(is.na(i$n)) | is.na(tail(i$n, 1)))
+  w <- which(!is.na(i$date) & !is.na(i$n))
+  if(any(w)){
+    if(nrow(unique(i[w, c("date", "n")])) < 2){
+      FALSE
+    }else{
+      TRUE
+    }
+  }else{
+    FALSE
+  }
+})] # remove all n = NA or n = NA now
+```
+
+```{r, echo = FALSE}
+mgp <- c(1, 0.25, 0)
+tcl <- -0.2
+cex.axis <- 1.5
+cex.text <- 1.5
+vdate <- seq.Date(as.Date("1970-01-01"), as.Date("2040-01-01"), by = "5 year")
+colgrid <- adjustcolor("black", 0.3)
+```
+
+<br><br><br>
+
+```{r, echo = FALSE}
+sp <- "Ambystoma laterale"
+#sp <- sample(names(l), 1)
+com <- r[SNAME == sp, ]$SCOMNAME[1]
+spcom <- paste(sub("^(\\w)", "\\U\\1", com, perl = TRUE), "(", sp, ")")
+spcom <- spcom
+```
+
+```{r, echo = FALSE}
+#################################
+### Show an example species #####
+#(sp <- sample(r$SNAME, 1))
+name <- grep(sp, names(l), value = TRUE)
+x <- l[[name[1]]]
+plot(x$date, x$n, ylim = c(0, 5), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+abline(h = seq(0, 5, by = 0.5), lty = 3, col = colgrid)
+abline(v = vdate, lty = 3, col = colgrid)
+lines(x$date, x$n, type = "b", yaxt = "n", lwd = 2, pch = 16, cex = 1.5)
+mtext(side = 3, line = 0, text = spcom, font = 1, cex = cex.text)
+mtext(side = 2, line = 2.5, text = "Rang de précarité", font = 2, cex = cex.text)
+mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+axis(2, at = 0:5, label = paste0(c("SH/SX", paste0("S", 1:5))), las = 2, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+a <- approx(x$date, x$n, ties = "ordered")
+#lines(a$x, a$y, col = "red")
+```
+
+# Changement par rapport à l'état initial
+
+```{r, echo = FALSE}
+#sp <- "Hemidactylium scutatum"
+#(sp <- sample(r$SNAME, 1))
+name <- grep(sp, names(l), value = TRUE)
+x <- l[[name[1]]]
+plot(x$date, x$ndiff, ylim = c(-4, 3.5), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+abline(h = seq(-4, 3.5, by = 1), lty = 3, col = colgrid)
+abline(v = vdate, lty = 3, col = colgrid)
+axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+lines(x$date, x$ndiff, type = "b", yaxt = "n", lwd = 2, pch = 16, cex = 1.5)
+mtext(side = 3, line = 0, text = spcom, cex = cex.text)
+mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 2, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+```
+
+# Changement pour toutes les espèces
+
+```{r all, echo = FALSE}
+#################################
+### Plot all species ############
+xout <- seq(as.Date("1990-01-01"), Sys.Date(), by = 1)
+plot(as.Date(0), 0, , xlim = range(xout) + c(0, 5 * 365), ylim = c(-4.5, 4), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+abline(h = seq(-4, 3.5, by = 1), lty = 3, col = colgrid)
+abline(v = vdate, lty = 3, col = colgrid)
+axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+invisible(lapply(l, function(i){
+  offset <- rnorm(1, 0, 0.10)
+  lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.10))
+  text(tail(i$date, 1) + 265, tail(offset + i$ndiff, 1), label = i$SNAME[1], cex = 0.45, adj = c(0, 0.5), xpd = TRUE, col = adjustcolor("black", 0.25))
+}))
+#abline(0, 0, lty = 3, col = "red")
+mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 2, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+```
+
+# Changement moyen
+
+```{r indicator, echo = FALSE, eval = TRUE, include = TRUE}
+<<all>>
+### Add indicator
+ll <- invisible(lapply(seq_along(l), function(i){
+  x <- l[[i]]
+  res <- as.data.frame(approx(x$date, x$ndiff, xout = xout, ties = "ordered"))
+  names(res) <- c("date", names(l)[i])
+  res[, 2]
+}))
+I <- do.call("cbind", ll) |>
+  apply(1, mean, na.rm = TRUE)
+
+lines(xout, I, col = adjustcolor("red", 0.75), lwd = 4)
+```
+
+<!-- ## Espèce initiale -->
+
+```{r, echo = FALSE, eval = TRUE, include = FALSE}
+<<indicator>>
+##################################
+### Add a target species #########
+#sp <- "Ambystoma laterale"
+name <- grep(sp, names(l), value = TRUE); name
+x <- l[[name[1]]]
+lines(x$date, x$ndiff, type = "b", col = adjustcolor("orange",0.95), lwd = 2, pch = 16, cex = 1.5)
+text(x$date[1] - 365, x$ndiff[1], x$SRANK[1], col = adjustcolor("orange",0.95), adj = c(1, 0.5), font = 2)
+text(x$date[nrow(x)] + 265, x$ndiff[nrow(x)], x$SRANK[nrow(x)], col = adjustcolor("orange",0.95), adj = c(0, 0.5), xpd = TRUE, font = 2)
+mtext(side = 3, line = -2, text = "Différence moyenne", col = adjustcolor("red", 0.75), adj = 0.05, font = 2, cex = cex.text)
+mtext(side = 3, line = -4, text = paste0("", sp), col = adjustcolor("orange", 0.95), adj = 0.05, xpd = TRUE, font = 2, cex = cex.text)
+#legend("topleft", legend = c("Différence moyenne", paste("Espèce:", sp)), lwd = c(4, 2), pch = c(NA, 16), col = adjustcolor(c("red", "orange"), 0.75), bty = "n", inset = c(0.025, 0), pt.cex = 1.5, cex = 1.25)
+
+
+```
+
+# Problèmes
+
+-   Nombreux problèmes et irrégularités dans les fichiers de rangs de précarité
+
+-   Impossible d'éliminer les améliorations qui sont dues à l'acquisition de nouvelles connaissances (e.g. plantes)
+
+-   L'ajout d'espèces évaluées au cours du temps ramènent la moyenne des écarts aux rangs initiaux près de 0 (une espèce qui a été évaluée pour une première fois récemment n'a pas encore eu le temps de voir son rang changer)
+
+# Solutions ?
+
+-   Restreindre l'analyse à des groupes bien connus ou suivis (reptiles, amphibiens, oiseaux, etc.)
+
+-   Pondérer la moyenne des écarts aux rang initial avec le temps écoulé depuis la première évaluation?
+
+-   Faire l'analyse seulement sur les statuts menacés, vulnérables, susceptibles?
+
+-   Prendre une approche plus simple décrivant le % d'espèces dans chacune des catégories à travers le temps?
+
+# Par groupe
+
+```{r, echo = FALSE, fig.width = 11, fig.height = 8}
+
+tsrank <- function(x, group){
+  if(all(group %in% r$GGROUPE)){
+    x <- x[names(x) %in% r$SNAME[r$GGROUPE %in% group]]
+  } else {
+    if(all(group %in% r$GRANDGROUPE)){
+      x <- x[names(x) %in% r$SNAME[r$GRANDGROUPE %in% group]]
+    } else {
+      stop("group not all in GGROUPE or GRANDGROUPE")
+    }
+  } 
+  xout <- seq(as.Date("1990-01-01"), Sys.Date(), by = 1)
+  plot(as.Date(0), 0, , xlim = range(xout) + c(0, 5 * 365), ylim = c(-3, 2.5), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+  abline(h = seq(-4, 3.5, by = 1), lty = 3, col = colgrid)
+  abline(v = vdate, lty = 3, col = colgrid)
+  axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  invisible(lapply(x, function(i){
+    offset <- rnorm(1, 0, 0.10)
+    lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.10))
+    text(tail(i$date, 1) + 265, tail(offset + i$ndiff, 1), label = i$SNAME[1], cex = 0.45, adj = c(0, 0.5), xpd = TRUE, col = adjustcolor("black", 0.25))
+  }))
+  #abline(0, 0, lty = 3, col = "red")
+  #mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+  #mtext(side = 2, line = 2, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+  
+  if(length(group) == 1){
+    mtext(side = 3, line = 0, text = group, font = 2, cex = 1)
+  } else {
+    mtext(side = 3, line = 0, text = "Toutes les espèces", font = 2, cex = 1)
+  }
+  
+  ll <- invisible(lapply(seq_along(x), function(i){
+    y <- x[[i]]
+    res <- as.data.frame(approx(y$date, y$ndiff, xout = xout, ties = "ordered"))
+    names(res) <- c("date", "diff")
+    # if NA at the end, assume same value up to then
+    last_value <- tail(na.omit(res$diff), 1)  # Get the last non-NA value
+    res$diff[is.na(res$diff) & seq_along(res$diff) > max(which(!is.na(res$diff), arr.ind = TRUE))] <- last_value
+    res$weight <- cumsum(ifelse(is.na(res$diff), 0, 1))
+    res
+  }))
+  I1 <- do.call("cbind", lapply(ll, "[[", 2)) |>
+    apply(1, mean, na.rm = TRUE)
+  I2 <- rbindlist(ll) |>
+    _[, .(diff = sum(diff * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE)), by = .(date)]
+
+  I <- I2$diff
+  lines(xout, I1, col = adjustcolor("red", 0.75), lwd = 6)
+  lines(xout, I2$diff, col = adjustcolor("gold", 0.75), lwd = 3)
+}  
+
+g <- unique(r$GRANDGROUPE)
+g <- g[!g %in% c("Annélides", "Ptéridophytes")]
+par(mfrow = n2mfrow(length(g), asp = 1.5), mar = c(0, 3, 4, 0), oma = c(4, 4, 1, 1))
+invisible(lapply(g, function(i){
+  tsrank(l, group = i)
+}))
+tsrank(l, group = g)
+mtext(side = 1, line = 2.5, outer = TRUE, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 0, outer = TRUE, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+plot.new()
+par(oma = c(0, 0, 0, 0))
+legend("topleft", inset = 0, legend = c("Espèce", "Moy.", "Moy. pondérée"), col = c("grey50", "red", "gold"), lwd = c(1, 4, 4), text.font = 2, bty = "n", xpd = TRUE, cex = 1.25)
+par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
+
+```
+
+# Par grands groupes
+
+```{r, echo = FALSE, fig.width = 11, fig.height = 8}
+
+#g <- unique(r$GRANDGROUPE)
+g <- unique(r$GGROUPE)
+g <- g[!g %in% c("Annélides", "Ptéridophytes")]
+par(mfrow = n2mfrow(length(g), asp = 1.5), mar = c(0, 3, 4, 0), oma = c(4, 4, 0, 10))
+invisible(lapply(g, function(i){
+  tsrank(l, group = i)
+}))
+mtext(side = 1, line = 2.5, outer = TRUE, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 0, outer = TRUE, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+
+par(new = TRUE, mfrow = c(1, 1), mar = c(0, 0, 4, 0), oma = c(0, 0, 0, 0))
+plot.new()
+#par(oma = c(0, 0, 0, 0))
+legend(par("usr")[2], par("usr")[4], xjust = 1, yjust = 1, inset = 0, legend = c("Espèce", "Moy.", "Moy. pondérée"), col = c("grey50", "red", "gold"), lwd = c(1, 4, 4), text.font = 2, bty = "n", xpd = TRUE, cex = 0.75)
+par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
+
+```
+
+# Par grands groupes puis par rang
+
+```{r, echo = FALSE, fig.width = 11, fig.height = 8}
+
+g <- lapply(l, function(i){
+  i <- i[order(i$date), ]
+  w <- which(!is.na(i$n))[1]
+  data.frame(
+    species = i$SNAME[1],
+    group = i$GGROUPE[1],
+    rankinit = i$n[w],
+    yearinit = as.integer(substr(i$date[w], 1, 4))
+  )
+}) |> rbindlist()
+g[ , rankgroup := ifelse(rankinit >= 4, "S4S5", "S0S3")]
+g[ , .(n = .N, y = mean(yearinit), ysd = sd(yearinit)), by = .(group, rankgroup)][order(group, rankgroup), ]
+
+gl <- lapply(split(g , by = c("group", "rankgroup")), function(i){i$species})
+gl <- gl[sort(names(gl))]
+
+tsrank2 <- function(x, group){
+  x <- x[names(x) %in% gl[[group]]]
+  xout <- seq(as.Date("1990-01-01"), Sys.Date(), by = 1)
+  plot(as.Date(0), 0, , xlim = range(xout) + c(0, 5 * 365), ylim = c(-3, 2.5), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+  abline(h = seq(-4, 3.5, by = 1), lty = 3, col = colgrid)
+  abline(v = vdate, lty = 3, col = colgrid)
+  axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  invisible(lapply(x, function(i){
+    offset <- rnorm(1, 0, 0.10)
+    lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.10))
+    text(tail(i$date, 1) + 265, tail(offset + i$ndiff, 1), label = i$SNAME[1], cex = 0.45, adj = c(0, 0.5), xpd = TRUE, col = adjustcolor("black", 0.25))
+  }))
+  #abline(0, 0, lty = 3, col = "red")
+  #mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+  #mtext(side = 2, line = 2, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+  
+  if(length(group) == 1){
+    mtext(side = 3, line = 0, text = group, font = 2, cex = 1)
+  } else {
+    mtext(side = 3, line = 0, text = "Toutes les espèces", font = 2, cex = 1)
+  }
+  
+  ll <- invisible(lapply(seq_along(x), function(i){
+    y <- x[[i]]
+    res <- as.data.frame(approx(y$date, y$ndiff, xout = xout, ties = "ordered"))
+    names(res) <- c("date", "diff")
+    # if NA at the end, assume same value up to then
+    last_value <- tail(na.omit(res$diff), 1)  # Get the last non-NA value
+    res$diff[is.na(res$diff) & seq_along(res$diff) > max(which(!is.na(res$diff), arr.ind = TRUE))] <- last_value
+    res$weight <- cumsum(ifelse(is.na(res$diff), 0, 1))
+    res
+  }))
+  I1 <- do.call("cbind", lapply(ll, "[[", 2)) |>
+    apply(1, mean, na.rm = TRUE)
+  I2 <- rbindlist(ll) |>
+    _[, .(diff = sum(diff * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE)), by = .(date)]
+
+  I <- I2$diff
+  lines(xout, I1, col = adjustcolor("red", 0.75), lwd = 6)
+  lines(xout, I2$diff, col = adjustcolor("gold", 0.75), lwd = 3)
+  
+  
+  
+}  
+
+par(mar = c(0, 3, 3, 0), oma = c(4, 4, 2, 1))
+layout(matrix(1:8, ncol = 4, byrow = FALSE))
+invisible(lapply(names(gl), function(i){
+  tsrank2(l, group = i)
+}))
+mtext(side = 1, line = 2.5, outer = TRUE, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 0, outer = TRUE, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+mtext(side = 3, line = 0, outer = TRUE, text = "Groupes et rangs initialement attribués", font = 2, cex = cex.text)
+#plot.new()
+par(oma = c(0, 0, 0, 0))
+legend("topleft", inset = 0, legend = c("Espèce", "Moy.", "Moy. pondérée"), col = c("grey50", "red", "gold"), lwd = c(1, 4, 4), text.font = 2, bty = "n", xpd = TRUE, cex = 1.25)
+par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
+
+```
+
+# Nb d'années écoulée depuis le rang initial vs. l'écart par rapport à ce rang initial
+
+```{r, echo = FALSE, eval = TRUE}
+#########################################################
+### check if the change increases with time #############
+
+  ll <- invisible(do.call("rbind", lapply(l, function(i){
+    x <- i[!(is.na(i$date) | is.na(i$ndiff)), ]
+    c(as.numeric(diff(range(x$date), units = "days")) / 365, x$ndiff[nrow(x)] - x$ndiff[1])
+  })) |> as.data.frame() |> setNames(c("years", "diff")))
+  
+  years <- seq(0, 40, length.out = 100)
+  plot(ll$years, ll$diff, xlim = c(0, 40), pch = 21, cex = 2, bg = adjustcolor("black", 0.15), col = adjustcolor("black", 0.75), lwd = 0.3, bty = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "")
+  grid(col = colgrid)
+  m <- gam(diff ~ s(years, k = 4, m = 1), data = ll)
+  p <- predict(m, data.frame(years = years), se.fit = TRUE)
+  lines(years, p$fit, col = "red", lwd = 4)
+  polygon(c(years, rev(years), years[1]), c(p$fit + p$se.fit*1.96, rev(p$fit - p$se.fit*1.96), (p$fit + p$se.fit*1.96)[1]), border = NA, col = adjustcolor("red", 0.20))
+  axis(1, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent")
+  axis(2, mgp = mgp, tcl = tcl, cex.axis = cex.axis, col = "transparent", las = 2)
+  mtext(side = 1, line = 2, text = "Nb d'années",font = 2, cex = cex.text)
+  mtext(side = 2, line = 2, text = "Différence par rapport au rang initial",font = 2, cex = cex.text)
+
+
+
+
+
+```
+
+# % de chaque rang
+
+```{r rankprop, echo = FALSE, eval = TRUE, include = TRUE, fig.width = 11, fig.height = 8}
+### Add indicator
+
+ssrank <- function(x, group, cols){
+  
+  if(all(group %in% r$GGROUPE)){
+    x <- x[names(x) %in% r$SNAME[r$GGROUPE %in% group]]
+  } else {
+    if(all(group %in% r$GRANDGROUPE)){
+      x <- x[names(x) %in% r$SNAME[r$GRANDGROUPE %in% group]]
+    } else {
+      stop("group not all in GGROUPE or GRANDGROUPE")
+    }
+  } 
+
+  ll <- invisible(lapply(seq_along(x), function(i){
+    x <- x[[i]]
+    res <- as.data.frame(approx(x$date, round(x$n,0), xout = xout, method = "constant", ties = "ordered"))
+    names(res) <- c("date", names(x)[i])
+    res[, 2]
+  }))
+  ll <- do.call("cbind", ll)
+  I <- lapply(1:nrow(ll), function(i){
+         x <- ll[i, ]
+         100 * table(factor(x, levels = 0:5))/length(x[!is.na(x)])
+       }) |> do.call("rbind", args = _) 
+  
+  
+  plot(as.Date(0), 0, , xlim = range(xout) + c(0, 2 * 365), ylim = c(0, max(I, na.rm = TRUE)), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+  abline(h = seq(0, 100, by = 20), lty = 3, col = colgrid)
+  abline(v = vdate, lty = 3, col = colgrid)
+  axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  #mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+  #mtext(side = 2, line = 2, text = "% des espèces", font = 2, cex = cex.text)
+  if(length(group) == 1){
+    mtext(side = 3, line = 0, text = group, font = 2, cex = 1)
+  } else {
+    mtext(side = 3, line = 0, text = "Toutes les espèces", font = 2, cex = 1)
+  }
+  #cols <- adjustcolor(c("grey20", "darkred", "red", "orange", "gold2", "forestgreen"), 0.85)
+  invisible(lapply(0:5, function(i){
+    lines(as.Date(xout), I[, i+1], col = cols[i+1], lwd = 4)
+    #text(tail(as.Date(xout), 1), tail(I[, i+1], 1), label = paste0("S", i), col = cols[i+1], adj = c(-0.2, 0.5), font = 2)
+  }))
+  
+  #legend("topright", legend = rev(gsub("S0", "SH/SX", paste0("S", 0:5))), col = rev(cols), lwd = 8, text.font = 2, text.col = rev(cols), bty = "n")
+
+}
+
+#ssrank(l, "Embryophytes")
+
+g <- unique(r$GRANDGROUPE)
+g <- g[!g %in% c("Annélides", "Ptéridophytes")]
+cols <- adjustcolor(c("grey20", "darkred", "red", "orange", "gold2", "forestgreen"), 0.85)
+par(mfrow = n2mfrow(length(g), asp = 1.5), mar = c( 0, 2, 4, 0), oma = c(4, 3, 0, 1))
+invisible(lapply(g, function(i){
+  ssrank(l, group = i, cols = cols)
+}))
+ssrank(l, group = g, cols = cols)
+mtext(side = 1, line = 2, outer = TRUE, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 1, outer = TRUE, text = "% des espèces", font = 2, cex = cex.text)
+plot.new()
+
+#par(mfrow = c(1, 1), mar = c( 0, 2, 3, 8), oma = c(0, 0, 0, 0))
+#plot(1,1)
+legend("topleft", inset = 0, legend = rev(gsub("S0", "SH/SX", paste0("S", 0:5))), col = rev(cols), lwd = 4, text.font = 2, text.col = rev(cols), bty = "n", xpd = TRUE, cex = 1.25)
+
+
+```
+
+# Cas problématiques
+
+[Explication des rangs](https://www.quebec.ca/gouvernement/gouvernement-ouvert/transparence-performance/indicateurs-statistiques/donnees-especes-situation-precaire/comprendre-rangs-precarite)
+
+```{r, echo = FALSE, eval = FALSE}
+ra <- read_excel("RangSActuel_v2024-10-07.xlsx") |> setDT()
+#split(ra, ra$SNAME)
+names(ra)[which(names(ra) == "DATE dernière évaluation Rang S")] <- "date"
+ra[ , bd := "actuel"]
+
+rp <- read_excel("RangSPassé_v2024-10-07.xlsx") |> setDT()
+#split(rp, rp$SNAME)
+names(rp)[which(names(rp) == "Ancienne valeur")] <- "SRANK"
+names(rp)[which(names(rp) == "Date ancienne valeur")] <- "ancienne_valeur"
+names(rp)[which(names(rp) == "Date changement")] <- "date"
+rp[ , bd := "passé"]
+
+keepp <- c("SNAME", "SCOMNAME", "GRANDGROUPE", "SRANK", "date", "ancienne_valeur", "bd")
+keepa <- keepp[-(length(keepp)-1)]
+
+r <- rbind(ra[, ..keepa], rp[, ..keepp], fill = TRUE)
+r <- r[ ,.(SNAME, GRANDGROUPE, bd, SRANK, date, ancienne_valeur)]
+r[ , date := as.Date(date)]
+r[ , ancienne_valeur := as.Date(ancienne_valeur)]
+r <- r[order(SNAME, -bd, date), ]
+tab <- rev(sort(table(r$SRANK)))#; tab
+l <- split(r[, -2], r$SNAME)
+tab
+
+```
+
+# Exemples
+
+##### 
+
+Le rang actuel est plus précaire que le dernier rang passé.
+
+```{r, echo = FALSE}
+l[["Sternotherus odoratus"]]
+```
+
+##### 
+
+Le rang actuel est moins précaire que le dernier rang passé.
+
+```{r, echo = FALSE}
+
+l[["Bromus kalmii"]]
+```
+
+##### 
+
+Le dernier rang passé et le rang actuel ne correspondent pas du tout.
+
+```{r, echo = FALSE}
+l[["Lasiurus borealis"]]
+```
+
+##### 
+
+Le rang actuel ne correspond pas à un rang passé à la même date (2008-01-21).
+
+```{r, echo = FALSE}
+l[["Erigeron hyssopifolius"]]
+```
+
+##### 
+
+On ne sait pas quel rang attribuer pour la période allant de 2004-11-19 à 2019-08-06.
+
+```{r, echo = FALSE}
+l[["Lampropeltis triangulum"]]
+```
+
+##### 
+
+Dans les rangs passés il y a des dates dupliquées avec des valeurs de rang différentes.
+
+```{r, echo = FALSE}
+l[["Thamnophis saurita septentrionalis"]]
+```
+
+##### 
+
+Il n'y a pas de rang attribué actuellement, alors qu'il y a un rang S1 dans le passé.
+
+```{r, echo = FALSE}
+l[["Acella haldemani"]]
+```
+
+##### 
+
+Il n'y a pas de rang attribué actuellement et beaucoup de duplications de dates dans les rangs passé.
+
+```{r, echo = FALSE}
+l[["Dermochelys coriacea"]]
+```
+
+###### 
+
+Le dernier rang passé et le rang actuel ne correspondent pas et il y a une incertitude entre 2009-08-24 et 2015-03-30.
+
+```{r, echo = FALSE}
+l[["Vermivora cyanoptera"]]
+```
+
+###### 
+
+Rangs passés, mais plus de rang actuellement?
+
+```{r, echo = FALSE}
+l[["Abagrotis brunneipennis"]]
+```

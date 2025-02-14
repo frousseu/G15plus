@@ -1,0 +1,767 @@
+---
+title: "G15+ / Taux d'observation des EEE"
+author: ""
+format: 
+   html:
+     fig-width: 10
+     fig-height: 7
+     out-width: 100%
+     page-layout: full
+     self-contained: true
+     toc: true
+     css: styles.css
+resources:
+  - sscripts.js
+editor: visual
+editor_options: 
+  chunk_output_type: console
+execute:
+  cache: false 
+---
+
+```{css, echo = FALSE, eval = FALSE}
+
+.quarto-document img {
+  width: 100%;
+  height: auto;  /* Preserves aspect ratio */
+  max-width: 100%;
+}
+
+h1 {
+  margin-top: 25vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+h2 {
+  margin-top: 5vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+code.r{
+  font-size: 20px;
+}
+pre {
+  font-size: 20px;
+}
+
+```
+
+
+```{r, echo = FALSE, message = FALSE}
+library(jsonlite)
+library(data.table)
+library(mgcv)
+library(sf)
+library(gratia)
+
+d <- fread("/home/frousseu/Downloads/0067051-241126133413365.csv")
+d <- d[institutionCode == "iNaturalist",]
+d <- d[species != "", ]
+
+eee <- fread("/home/frousseu/Downloads/sentinelle_liste_sp.csv")[-1, ]$Nom_latin
+#eee <- st_read("/home/frousseu/Downloads/especes_exo_envahissantes.gpkg") |>
+#  _$Nom_espece_latin |>
+#  strsplit(" ") |>
+#  lapply("[", 1:2) |>
+#  sapply(paste, collapse = " ") |>
+#  unique()
+eee <- sub("^(([^ ]+\\s+){1}[^ ]+).*", "\\1", eee)
+
+years <- 2008:2024
+
+xtot <- fromJSON(paste0("https://api.inaturalist.org/v1/observations/histogram?interval=year&place_id=13336&year=", paste(years, collapse = ","),"&order=desc&order_by=created_at"))#$total_results
+xtot <- unlist(xtot$results$year)
+xtot0 <- cbind(years, xtot) |> as.data.frame()
+
+```
+
+# Données iNaturalist
+
+ - Nb d'observateurs élevé depuis environ 2019
+ - On ne remontre pas loin dans le temps
+ 
+```{r, echo = FALSE, message = FALSE, out.width = "60%"}
+
+dd <- unique(d, by = c("year", "recordedBy")) |>
+        _[ , .(n = .N), by = .(year)] |>
+        _[order(year), ] |>
+        _[year %in% 2008:2024, ]
+
+plot(dd$year, dd$n, type = "b", lwd = 2, pch = 16, xlab = "", ylab = "")
+mtext(side = 1, line = 3, text = "Années", font = 2)
+mtext(side = 2, line = 3, text = "Nb d'observateurs", font = 2)
+
+xx <- d[ , .(n = .N), by = .(year)] |>
+        _[order(year), ] |>
+        _[year %in% 2008:2024, ]
+
+```
+ 
+# Données ~~Réseau de suivi ichtyologique (RSI)~~
+
+ - Stations regroupées par secteur du Fleuve (~ 3 visites au total par secteur depuis 1995)
+ - Peu de réplicats par station (3)
+
+# Taux d'observation des EEE
+
+```{r, echo = FALSE}
+
+res <- invisible(lapply(eee, function(i){
+  sp <- i#"Heraclides cresphontes"
+  sp <- gsub(" ", "%20", sp)
+  json <- fromJSON(paste0("https://api.inaturalist.org/v1/search?q=", sp)) |>
+    _$results$record
+
+  if(is.null(json)){
+    return(NULL)
+  }
+
+  taxon_id <- json$id[1]
+  taxon_group_id <- json$iconic_taxon_id[1]
+
+  if(TRUE){
+    taxon_group_id <- paste0("&taxon_id=",taxon_group_id)
+    xtot <- fromJSON(paste0("https://api.inaturalist.org/v1/observations/histogram?interval=year&place_id=13336&year=", paste(years, collapse = ","), taxon_group_id,"&order=desc&order_by=created_at"))#$total_results
+    xtot <- unlist(xtot$results$year)
+    xtot <- cbind(years, xtot) |> as.data.frame()
+  }else{
+    xtot <- xtot0
+  }
+
+
+  ### HISTO
+  xs <- fromJSON(paste0("https://api.inaturalist.org/v1/observations/histogram?interval=year&taxon_id=", taxon_id, "&place_id=13336&year=", paste(years, collapse = ","),"&order=desc&order_by=created_at"))#$total_results
+  xs <- unlist(xs$results$year)
+  if(is.null(xs)){
+    return(NULL)
+  }
+  xs <- data.frame(years = as.integer(substr(names(xs),1, 4)), xs)
+
+  p <- merge(xs, xtot, all.y = TRUE)
+  p$xs <- ifelse(is.na(p$xs), 0, p$xs)
+
+  names(p) <- c("year", "nobs", "ntot")
+  #print(i)
+  cbind(species = i, p)
+
+}))
+names(res) <- eee
+p <- do.call("rbind", res)
+
+#names(p) <- c("year", "nobs", "ntot")
+par(mar = c(4, 4, 1, 3))
+plot(0, 0, xlim = range(pretty(years)), ylim = c(0, min(c(max(p$nobs / p$ntot), 0.03))), type = "b", xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+axis(1, at = pretty(years), cex.axis = 0.75, tcl = -0.1, mgp = c(1, 0.15, 0))
+axis(2, at = pretty(p$nobs / p$ntot), las = 2, cex.axis = 0.75, tcl = -0.1, mgp = c(1, 0.15, 0))
+mtext(side = 1, line = 3, text = "Années", font = 2)
+mtext(side = 2, line = 3, text = "Nb d'observations / Nb total", font = 2)
+
+l <- split(p, p$species)
+invisible(lapply(l, function(i){
+  lines(i$year, i$nobs / i$ntot, col = adjustcolor("black", 0.2))
+  ii <- i[nrow(i), ]
+  text(ii$year + 0.25, ii$nobs / ii$ntot, labels = ii$species, cex = 0.35, adj = c(0, 0.5), xpd = TRUE)
+}))
+
+eeeninat <- p |>
+  as.data.table() |>
+  _[, .(n = sum(nobs)), by = .(species)] |>
+  _[order(-n), ]
+
+eeengbif <- d[species %in% eee, ] |>
+  _[, .(n = .N), by = .(species)] |>
+  _[order(-n), ]
+
+spn <- d[!species %in% eee, ] |>
+  _[, .(n = .N), by = .(species)] |>
+  _[order(-n), ]
+
+```
+
+# Taux standardisé
+
+```{r, echo = FALSE}
+
+invisible(ll <- lapply(l, function(i){
+  yr <- 2021:2024
+  ii <- i[i$year %in% yr, ]
+  i$ratio <- (i$nobs / i$ntot) / mean(ii$nobs/ii$ntot)
+  #i$sratio <- ifelse(i$ratio < 0, -1/i$ratio - 1, i$ratio - 1)
+  i
+}))
+pp <- do.call("rbind", ll)
+
+par(mar = c(2, 2.5, 1, 3))
+#xlim <- c(2018, 2024)
+xlim <- range(pretty(years))
+plot(0, 0, xlim = xlim, ylim = c(0, 4), type = "b", xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+axis(1, at = pretty(xlim), cex.axis = 0.75, tcl = -0.1, mgp = c(1, 0.15, 0))
+axis(2, at = pretty(p$ratio), las = 2, cex.axis = 0.75, tcl = -0.1, mgp = c(1, 0.15, 0))
+
+th <- 5
+ll <- split(pp, pp$species)
+invisible(lapply(ll, function(i){
+  if(sum(i$nobs) < th){
+    return(NULL)
+  }
+  lines(i$year, i$ratio, col = adjustcolor("black", 0.2))
+  ii <- i[nrow(i), ]
+  text(ii$year + 0.25, ii$ratio, labels = ii$species, cex = 0.35, adj = c(0, 0.5), xpd = TRUE)
+}))
+abline(1, 0, lty = 3)
+dat <- do.call("rbind", lapply(ll, function(i){  if(sum(i$nobs) < th){ return(NULL) }else{ i }}))
+m <- loess(ratio ~ year, data = dat, span = 0.75)
+preds <- predict(m, data.frame(year = years))
+m <- gam(ratio ~ s(year), data = dat)
+preds <- predict(m, data.frame(year = years), se.fit = TRUE)
+polygon(c(years, rev(years), years[1]), c(preds$fit + preds$se.fit*1.96, rev(preds$fit - preds$se.fit*1.96), (preds$fit + preds$se.fit*1.96)[1]), border = NA, col = adjustcolor("red", 0.20))
+lines(years, preds$fit, lwd = 3, col = adjustcolor("red", 0.75))
+mtext(side = 1, text = "Années", line = 1, font = 2)
+mtext(side = 2, text = "Taux d'observation standardisé moyen", line = 1.25, font = 2)
+moy <- aggregate(ratio ~ year, data = dat, FUN = mean)
+lines(moy$year, moy$ratio, type = "b", lwd = 2, pch = 16, col = adjustcolor("black", 0.75))
+
+
+```
+
+# Rééchantillonage des observateurs avec EEE
+
+```{r, echo = FALSE}
+
+
+library(data.table)
+library(mgcv)
+library(sf)
+
+#d <- fread("/home/frousseu/Documents/github/flore.quebec/data/gbif/0039190-240321170329656.csv")
+#d <- fread("/home/frousseu/Downloads/0014913-241024112534372.csv")
+d <- fread("/home/frousseu/Downloads/0067051-241126133413365.csv")
+d <- d[institutionCode == "iNaturalist", ]
+#d <- d[phylum == "Tracheophyta", ]
+d[, date := eventDate]
+d[, jul := as.integer(format(as.Date(date),"%j"))]
+d[, year := as.integer(substr(date,1,4))]
+d <- d[species != "",]
+years <- 2012:2024#(max(d$year)-1)
+d <- d[year %in% years, ]
+
+
+#x <- d[, .(n = .N), by = c("species", "year")]
+#a <- d[, .(N = .N), by = c("year")]
+#x <- merge(x, a)
+#x[, p := n / N]
+##x[, p := p / max(p), by = "species"]
+#add <- expand.grid(species = unique(x$species), year = unique(x$year), n = 0, N = NA, p = 0) |>
+#  as.data.table()
+#x[add, on = c("species", "year")]
+##x[, p := (p - mean(p)) / sd(x$p), by = "species"]
+#x <- x[order(species, year),]
+#l <- split(x, by = "species")
+##l <- l[sapply(l, nrow) == (length(years)-1)]
+
+X <- d[ , .(species, year, date, recordedBy, kingdom)] |>
+  _[order(recordedBy, date), ]# |>
+#_[ , first := min(date), by = .(recordedBy)][first <= "2013-01-01", ]# |>
+#_[ , rank := seq_len(.N), by = .(recordedBy) ][rank >= 150, ] |>
+
+
+#X[recordedBy %in% sample(unique(recordedBy), 3, replace = TRUE), ]
+
+add <- expand.grid(species = unique(d$species), year = unique(d$year), n = 0, stringsAsFactors = FALSE) |>
+  as.data.table() |>
+  _[order(species, year), ]
+
+
+
+xl <- invisible(lapply(1:200, function(i){
+  #print(i)
+  obs <- table(X$recordedBy) |>
+    (\(.) {.[. >= 1]})() |> # remove observers with less than x observations
+    names() |>
+    sample(replace = TRUE) |>
+    table() |>
+    as.data.table() |>
+    setnames(c("recordedBy", "nreps"))
+  x <- merge(X, obs, all.x = TRUE)
+  x <- x[!is.na(nreps)]
+  x <- x[rep(1:nrow(x), times = x$nreps), ]
+
+  sy <- x[, .(n = .N), by = c("species", "year")]
+  y <- x[, .(N = .N), by = c("year")]
+  #y <- x[kingdom == "Plantae", .(N = .N), by = c("year")]
+  x <- rbind(sy, add)
+  x <- x[!duplicated(x, by = c("species", "year")), ][order(species, year),]
+  x <- merge(x, y, all.x = TRUE)
+  #x[, p := (p - mean(p)) / sd(x$p), by = "species"]
+  #x[, p := p / max(p), by = "species"]
+  x <- x[order(species, year),]
+  x[, p := n / N]
+  x <- x[, .(species, year, p)]
+  x$p
+}))
+
+p <- do.call("cbind", xl) |> as.data.table()
+p <- cbind(add[ ,.(species, year)], p)
+l <- split(p, p$species)
+
+
+
+plotsp <- function(sp){
+  x <- l[[sp]]
+  mat <- as.matrix(x[, 3:ncol(x)])
+  xlim <- range(x$year) + c(-0.5, 0.5)
+  ylim <- c(0, max(mat, na.rm = TRUE))
+  plot(x$year, x$V1, type = "n", xlim = xlim, ylim = ylim, xaxt = "n", yaxt = "n")
+  invisible(lapply(2:ncol(x), function(i){
+    lines(x$year, x[[i]], col = adjustcolor("black", 0.025))
+  }))
+  ci <- t(apply(mat, 1, quantile, prob = c(0.025, 0.975), na.rm = TRUE))
+  polygon(c(x$year, rev(x$year), x$year[1]), c(ci[ , 1], rev(ci[ , 2]), ci[ 1, 1]), col = adjustcolor("red", 0.25), border = NA)
+  lines(x$year, ci[, 1], col = adjustcolor("red", 0.5))
+  lines(x$year, ci[, 2], col = adjustcolor("red", 0.5))
+  mtext(side = 3, line = -3, adj = 0.5, text = sp, font = 3, cex = 1)
+  axis(1, at = pretty(xlim), tcl = 0.1, mgp = c(1, 0.05, 0), cex.axis = 0.75, col = "grey80")
+  axis(2, at = pretty(ylim), label = pretty(ylim) * 100, tcl = 0.1, mgp = c(1, 0.15, 0), las = 2, cex.axis = 0.75, col = "grey80")
+  box(col = "grey80")
+}
+
+```
+
+
+```{r, echo = FALSE}
+spe <- eeengbif$species[1:12]
+par(mfrow = n2mfrow(length(spe)), mar = c(0, 3, 0, 0), oma = c(4, 4, 4, 4))
+invisible(lapply(spe, function(i){
+  plotsp(i)
+}))
+mtext(side = 1, outer = TRUE, line = 2, text = "Années", font = 2)
+mtext(side = 2, outer = TRUE, line = 2, text = "(Nb d'observations / Nb total) * 100", font = 2)
+par(mfrow = c(1, 1), mar = c(4, 4, 1, 1), oma = c(0, 0, 0, 0))
+
+```
+
+
+## Rééchantillonnage des observateurs avec non EEE
+
+```{r, echo = FALSE}
+spe <- eeengbif$species[1:24]
+spe <- c("Lymantria dispar", "Aglais io", "Vanessa atalanta", "Procyon lotor", "Odocoileus virginianus", "Trillium erectum", "Nymphalis antiopa", "Papilio canadensis", "Sciurus carolinensis")
+spe <- c("Lymantria dispar", "Aglais io", "Vanessa atalanta", "Procyon lotor", "Odocoileus virginianus", "Trillium erectum")
+par(mfrow = n2mfrow(length(spe)), mar = c(0, 3, 0, 0), oma = c(4, 4, 4, 4))
+invisible(lapply(spe, function(i){
+  plotsp(i)
+}))
+mtext(side = 1, outer = TRUE, line = 2, text = "Années", font = 2)
+mtext(side = 2, outer = TRUE, line = 2, text = "(Nb d'observations / Nb total) * 100", font = 2)
+par(mfrow = c(1, 1), mar = c(4, 4, 1, 1), oma = c(0, 0, 0, 0))
+```
+
+
+
+# Combiner les espèces
+
+```{r, echo = FALSE}
+
+tab <- rev(sort(table(X$species)))
+sp <- eee[eee %in% names(tab)]
+#sort(match(eee, names(tab)))
+#sp <- names(rev(sort(tab)))[1:50]
+plot(l[[1]]$year, l[[1]]$V1, type = "n", ylim = c(0, 0.015), xlab = "Années", ylab = "Nb obs / Total")
+invisible(o <- lapply(sp, function(j){
+  x <- l[[j]]
+  mat <- as.matrix(x[, 3:ncol(x)])
+  #invisible(lapply(2:ncol(x), function(i){
+  #  lines(x$year, x[[i]], col = adjustcolor("black", 0.025))
+  #}))
+  ci <- t(apply(mat, 1, quantile, prob = c(0.025, 0.975), na.rm = TRUE))
+  offset <- 0#tail(((ci[, 2] - ci[, 1])/2) + ci[, 1], 1)
+  polygon(c(x$year, rev(x$year), x$year[1]), c(ci[ , 1], rev(ci[ , 2]), ci[ 1, 1]) - offset, col = adjustcolor("black", 0.05), border = NA)
+  #lines(x$year, ci[, 1], col = adjustcolor("red", 0.5))
+  #lines(x$year, ci[, 2], col = adjustcolor("red", 0.5))
+
+}))
+
+```
+
+
+```{r, echo = FALSE, eval = FALSE}
+
+tab <- rev(sort(table(X$species)))
+#sp <- eee[eee %in% names(tab)]
+#sort(match(eee, names(tab)))
+sp <- names(rev(sort(tab)))[1:50]; sp <- sp[!sp %in% eee]
+plot(l[[1]]$year, l[[1]]$V1, type = "n", ylim = c(0, 0.015), xlab = "Années", ylab = "Nb obs / Total")
+invisible(o <- lapply(sp, function(j){
+  x <- l[[j]]
+  mat <- as.matrix(x[, 3:ncol(x)])
+  #invisible(lapply(2:ncol(x), function(i){
+  #  lines(x$year, x[[i]], col = adjustcolor("black", 0.025))
+  #}))
+  ci <- t(apply(mat, 1, quantile, prob = c(0.025, 0.975), na.rm = TRUE))
+  offset <- 0#tail(((ci[, 2] - ci[, 1])/2) + ci[, 1], 1)
+  polygon(c(x$year, rev(x$year), x$year[1]), c(ci[ , 1], rev(ci[ , 2]), ci[ 1, 1]) - offset, col = adjustcolor("black", 0.05), border = NA)
+  #lines(x$year, ci[, 1], col = adjustcolor("red", 0.5))
+  #lines(x$year, ci[, 2], col = adjustcolor("red", 0.5))
+
+}))
+
+```
+
+# Avec GAMs plutôt que rééchantillonnage
+
+- Pour avoir une représentation symétrique autour de 1 et éviter les zéros
+
+```{r, echo = FALSE}
+
+
+x <- 2010:2024
+y <- seq(2, 0.5, length.out = length(x))
+
+#dat$nobs <- rbinom(nrow(dat), size = dat$ntot, prob = 0.001)
+#dat$ratio <- dat$nobs/dat$ntot / tail(dat$nobs/dat$ntot, 1)
+
+dats <- invisible(lapply(res[!sapply(res, is.null)], function(i){
+  if(tail(i$nobs, 1) == 0){
+    moy <- sum(i$nobs)/sum(i$ntot)
+  } else {
+    moy <- tail(i$nobs/i$ntot, 1)
+  }
+  i$ratio <- i$nobs / i$ntot / moy
+  i
+}))
+#dats
+
+
+plot(x, y, type = "n", log = "y", yaxt = "n", ylim = c(0.05, 20), cex = 0, xlab = "Années", ylab = "Taux moyen standardisé")
+
+invisible(lapply(names(dats), function(sp){
+  #sp <- sample(names(dats),1)
+  dat <- dats[[sp]]
+  x <- dat$year
+  y <- dat$ratio
+  #points(x, y, type = "b", log = "y", pch = 16, col = adjustcolor("black", 0.5), cex = 4 * dat$ntot/max(dat$ntot))
+  abline(log(1), 0, lty = 3)
+  v <- 2:10
+  at <- c(rev(1/v), 1, v)
+  axis(2, at = at, label = round(at, 2), las = 2)
+
+  m <- gam(cbind(nobs, ntot) ~ s(year, k = 4, m = 1), family = binomial, data = dat)
+  v <- seq(min(dat$year), max(dat$year), length.out = 100)
+  #p <- predict(m, data.frame(year = v), se.fit = TRUE)
+  #p <- data.frame(fit = p$fit, low = p$fit - p$se.fit*1.96, high = p$fit + p$se.fit*1.96)
+  p <- confint(m, parm = "s(year)", type = "simultaneous", data = data.frame(year = v), shift = TRUE) |>
+    as.data.frame() |>
+    _[,c(".estimate", ".lower_ci", ".upper_ci")] |>
+    setnames(c("fit", "low", "high"))
+  p <- as.data.frame(lapply(p, boot::inv.logit))
+  p <- p / tail(dat$nobs/dat$ntot/dat$ratio, 1)
+  #lines(v, p$fit, col = "red")
+  polygon(c(v, rev(v), v[1]), c(p$high, rev(p$low), (p$high)[1]), border = NA, col = adjustcolor("black", 0.05))
+  #sp
+  #sum(dat$nobs)/sum(dat$ntot)
+}))
+
+
+
+```
+
+# Taux d'observation global des EEE
+
+- Proportion d'observations de EEE (toutes espèces confondues)
+
+```{r, echo = FALSE}
+
+vascan <- fread("/home/frousseu/Documents/github/flore.quebec/data/vascan/DWC-2c9d816e-9ff9-4c1f-8bb5-f3047e05f50a/TXT-76b0e2bc-7f67-46c2-8d78-1e3687b59e26.txt",header=TRUE,encoding="UTF-8")
+vascan$species <- vascan$`Nom scientifique`
+vascan <- vascan |>
+             _[Rang == "Espèce",] |>
+             _[ , .(species, Québec)] |>
+             _[ , status := ifelse(Québec == "Indigène", 0, 1)]
+
+indigenous <- vascan[status == 0, ]$species
+introduced <- vascan[status == 1, ]$species
+
+
+
+xl <- invisible(lapply(1:50, function(i){
+  #print(i)
+  x <- d
+  #x <- x[phylum != "Chordata", ]
+  #x <- x[species %in% c(indigenous, introduced), ]
+  x <- x[year >= 2008, ]
+  obs <- table(x$recordedBy) |>
+    (\(.) {.[. >= 1]})() |> # remove observers with less than x observations
+    names() |>
+    sample(replace = TRUE) |>
+    #sample(2000) |> # for fun, just keep x observers each time
+    table() |>
+    as.data.table() |>
+    setnames(c("recordedBy", "nreps"))
+  #x <- merge(x, obs, all.x = TRUE)
+  #x <- x[!is.na(nreps)]
+  x <- x[obs, on = "recordedBy"] # replaces the two previous lines
+  x <- x[rep(1:nrow(x), times = x$nreps), ]
+  x <- x[, ntot := .N, by = c("year")] |>
+    _[, .(nobs = .N), by = c("species", "family", "order", "class", "year", "ntot")] |>
+    _[species %in% eee, ] |>
+    #_[species %in% tail(eeeninat$species, -10)] |>
+    #_[species %in% tail(eeeninat$species, -10)] |>
+    #_[species %in% head(spn$species, 20)] |>
+    #_[species %in% introduced, ] |>
+    #_[order %in% "Lepidoptera", ] |>
+    _[ , .(n = sum(nobs)), by = .(year, ntot)] |>
+    _[order(year), ]
+  x
+}))
+
+
+par(mar = c(4, 4, 1, 4))
+plot(xl[[1]]$year, xl[[1]]$n / xl[[1]]$ntot, type = "n", ylim = c(0, 0.05), xlab = "", ylab = "")
+invisible(lapply(xl, function(i){
+  lines(i$year, i$n / i$ntot, col = adjustcolor("black", 0.15))
+})); grid(col="grey90")
+
+
+axxl <- do.call("rbind", xl) |>
+         as.data.table()
+xxl <- axxl[ , .(p = mean(n / ntot)), by = .(year)]
+         
+lines(xxl$year, xxl$p, type = "b", lwd = 2, pch = 16)
+mtext(side = 1, line = 2, text = "Années", font = 2)
+mtext(side = 2, line = 2.25, text = "Nb d'observations / Nb total", font = 2)
+
+m <- gam(cbind(n, ntot) ~ s(year, k = 3, m = 2), family = binomial, data = axxl)
+#m <- loess(n/ntot ~ year, span = 0.5, data = axxl)
+v <- seq(min(axxl$year), max(axxl$year), length.out = 100)
+#p <- predict(m, data.frame(year = v), type = "response")
+p <- confint(m, parm = "s(year)", type = "simultaneous", data = data.frame(year = v), shift = TRUE) |>
+ as.data.frame() |>
+ _[,c(".estimate", ".lower_ci", ".upper_ci")] |>
+ setnames(c("fit", "low", "high"))
+p <- as.data.frame(lapply(X = p, boot::inv.logit))
+lines(v, p$fit, lwd = 5, col = "red")
+#polygon(c(v, rev(v), v[1]), c(p$high, rev(p$low), (p$high)[1]), border = NA, col = adjustcolor("black", 0.5))
+
+plot_observers <- function(x){
+  par(new = TRUE)
+  plot(x$year, x$n, type = "b", lwd = 2, lty = 3, pch = 1, xlab = "", ylab = "", yaxt = "n", log = "")
+  axis(side = 4, mgp = c(0.5, 0.25, 0), tcl = -0.1, las = 2)
+  mtext(side = 4, line = 2.25, text = "Nb d'observateurs")
+}; #plot_observers(dd) #; plot_observers(xx)
+
+
+```
+
+
+# Taux d'observation global des espèces communes
+
+- Proportion d'observations des 20 espèces les plus signalées
+
+```{r, echo = FALSE}
+
+vascan <- fread("/home/frousseu/Documents/github/flore.quebec/data/vascan/DWC-2c9d816e-9ff9-4c1f-8bb5-f3047e05f50a/TXT-76b0e2bc-7f67-46c2-8d78-1e3687b59e26.txt",header=TRUE,encoding="UTF-8")
+vascan$species <- vascan$`Nom scientifique`
+vascan <- vascan |>
+             _[Rang == "Espèce",] |>
+             _[ , .(species, Québec)] |>
+             _[ , status := ifelse(Québec == "Indigène", 0, 1)]
+
+indigenous <- vascan[status == 0, ]$species
+introduced <- vascan[status == 1, ]$species
+
+
+
+xl <- invisible(lapply(1:50, function(i){
+  #print(i)
+  x <- d
+  #x <- x[phylum != "Chordata", ]
+  #x <- x[species %in% c(indigenous, introduced), ]
+  x <- x[year >= 2008, ]
+  obs <- table(x$recordedBy) |>
+    (\(.) {.[. >= 1]})() |> # remove observers with less than x observations
+    names() |>
+    sample(replace = TRUE) |>
+    #sample(2000) |> # for fun, just keep x observers each time
+    table() |>
+    as.data.table() |>
+    setnames(c("recordedBy", "nreps"))
+  #x <- merge(x, obs, all.x = TRUE)
+  #x <- x[!is.na(nreps)]
+  x <- x[obs, on = "recordedBy"] # replaces the two previous lines
+  x <- x[rep(1:nrow(x), times = x$nreps), ]
+  x <- x[, ntot := .N, by = c("year")] |>
+    _[, .(nobs = .N), by = c("species", "family", "order", "class", "year", "ntot")] |>
+    #_[species %in% eee, ] |>
+    #_[species %in% tail(eeeninat$species, -10)] |>
+    _[species %in% head(spn$species, 20)] |>
+    #_[species %in% introduced, ] |>
+    #_[order %in% "Lepidoptera", ] |>
+    _[ , .(n = sum(nobs)), by = .(year, ntot)] |>
+    _[order(year), ]
+  x
+}))
+
+
+par(mar = c(4, 4, 1, 4))
+plot(xl[[1]]$year, xl[[1]]$n / xl[[1]]$ntot, type = "n", ylim = c(0, 0.15), xlab = "", ylab = "")
+invisible(lapply(xl, function(i){
+  lines(i$year, i$n / i$ntot, col = adjustcolor("black", 0.15))
+})); grid(col="grey90")
+
+
+axxl <- do.call("rbind", xl) |>
+         as.data.table()
+xxl <- axxl[ , .(p = mean(n / ntot)), by = .(year)]
+         
+lines(xxl$year, xxl$p, type = "b", lwd = 2, pch = 16)
+mtext(side = 1, line = 2, text = "Années", font = 2)
+mtext(side = 2, line = 2.25, text = "Nb d'observations / Nb total", font = 2)
+
+m <- gam(cbind(n, ntot) ~ s(year, k = 3, m = 2), family = binomial, data = axxl)
+#m <- loess(n/ntot ~ year, span = 0.5, data = axxl)
+v <- seq(min(axxl$year), max(axxl$year), length.out = 100)
+#p <- predict(m, data.frame(year = v), type = "response", se.fit = TRUE)
+p <- confint(m, parm = "s(year)", type = "simultaneous", data = data.frame(year = v), shift = TRUE) |>
+ as.data.frame() |>
+ _[,c(".estimate", ".lower_ci", ".upper_ci")] |>
+ setnames(c("fit", "low", "high"))
+p <- as.data.frame(lapply(X = p, boot::inv.logit))
+lines(v, p$fit, lwd = 5, col = "red")
+#polygon(c(v, rev(v), v[1]), c(p$high, rev(p$low), (p$high)[1]), border = NA, col = adjustcolor("black", 0.5))
+
+plot_observers <- function(x){
+  par(new = TRUE)
+  plot(x$year, x$n, type = "b", lwd = 2, lty = 3, pch = 1, xlab = "", ylab = "", yaxt = "n", log = "")
+  axis(side = 4, mgp = c(0.5, 0.25, 0), tcl = -0.1, las = 2)
+  mtext(side = 4, line = 2.25, text = "Nb d'observateurs")
+}; #plot_observers(dd) #; plot_observers(xx)
+
+
+```
+
+
+
+# Taux d'observation global des espèces communes
+
+- On enlève es 20 espèces les plus signalées
+
+```{r, echo = FALSE}
+
+vascan <- fread("/home/frousseu/Documents/github/flore.quebec/data/vascan/DWC-2c9d816e-9ff9-4c1f-8bb5-f3047e05f50a/TXT-76b0e2bc-7f67-46c2-8d78-1e3687b59e26.txt",header=TRUE,encoding="UTF-8")
+vascan$species <- vascan$`Nom scientifique`
+vascan <- vascan |>
+             _[Rang == "Espèce",] |>
+             _[ , .(species, Québec)] |>
+             _[ , status := ifelse(Québec == "Indigène", 0, 1)]
+
+indigenous <- vascan[status == 0, ]$species
+introduced <- vascan[status == 1, ]$species
+
+
+
+xl <- invisible(lapply(1:50, function(i){
+  #print(i)
+  x <- d
+  #x <- x[phylum != "Chordata", ]
+  #x <- x[species %in% c(indigenous, introduced), ]
+  x <- x[year >= 2008, ]
+  obs <- table(x$recordedBy) |>
+    (\(.) {.[. >= 1]})() |> # remove observers with less than x observations
+    names() |>
+    sample(replace = TRUE) |>
+    #sample(2000) |> # for fun, just keep x observers each time
+    table() |>
+    as.data.table() |>
+    setnames(c("recordedBy", "nreps"))
+  #x <- merge(x, obs, all.x = TRUE)
+  #x <- x[!is.na(nreps)]
+  x <- x[obs, on = "recordedBy"] # replaces the two previous lines
+  x <- x[rep(1:nrow(x), times = x$nreps), ]
+  x <- x[, ntot := .N, by = c("year")] |>
+    _[, .(nobs = .N), by = c("species", "family", "order", "class", "year", "ntot")] |>
+    #_[species %in% eee, ] |>
+    #_[species %in% tail(eeeninat$species, -10)] |>
+    _[species %in% tail(spn$species, -20)] |>
+    #_[species %in% introduced, ] |>
+    #_[order %in% "Lepidoptera", ] |>
+    _[ , .(n = sum(nobs)), by = .(year, ntot)] |>
+    _[order(year), ]
+  x
+}))
+
+
+par(mar = c(4, 4, 1, 4))
+plot(xl[[1]]$year, xl[[1]]$n / xl[[1]]$ntot, type = "n", ylim = c(0, 0.95), xlab = "", ylab = "")
+invisible(lapply(xl, function(i){
+  lines(i$year, i$n / i$ntot, col = adjustcolor("black", 0.15))
+})); grid(col="grey90")
+
+
+axxl <- do.call("rbind", xl) |>
+         as.data.table()
+xxl <- axxl[ , .(p = mean(n / ntot)), by = .(year)]
+         
+lines(xxl$year, xxl$p, type = "b", lwd = 2, pch = 16)
+mtext(side = 1, line = 2, text = "Années", font = 2)
+mtext(side = 2, line = 2.25, text = "Nb d'observations / Nb total", font = 2)
+
+m <- gam(cbind(n, ntot) ~ s(year, k = 3, m = 2), family = binomial, data = axxl)
+#m <- loess(n/ntot ~ year, span = 0.5, data = axxl)
+v <- seq(min(axxl$year), max(axxl$year), length.out = 100)
+#p <- predict(m, data.frame(year = v), type = "response", se.fit = TRUE)
+p <- confint(m, parm = "s(year)", type = "simultaneous", data = data.frame(year = v), shift = TRUE) |>
+ as.data.frame() |>
+ _[,c(".estimate", ".lower_ci", ".upper_ci")] |>
+ setnames(c("fit", "low", "high"))
+p <- as.data.frame(lapply(X = p, boot::inv.logit))
+lines(v, p$fit, lwd = 5, col = "red")
+#polygon(c(v, rev(v), v[1]), c(p$high, rev(p$low), (p$high)[1]), border = NA, col = adjustcolor("black", 0.5))
+
+plot_observers <- function(x){
+  par(new = TRUE)
+  plot(x$year, x$n, type = "b", lwd = 2, lty = 3, pch = 1, xlab = "", ylab = "", yaxt = "n", log = "")
+  axis(side = 4, mgp = c(0.5, 0.25, 0), tcl = -0.1, las = 2)
+  mtext(side = 4, line = 2.25, text = "Nb d'observateurs")
+}; #plot_observers(dd) #; plot_observers(xx)
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r, echo = FALSE}
+
+
+
+```
+
+
+```{r, echo = FALSE}
+
+
+
+```
+
+
+```{r, echo = FALSE}
+
+
+
+```
+
+
+```{r, echo = FALSE}
+
+
+
+```
+
+
