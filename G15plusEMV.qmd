@@ -207,9 +207,9 @@ l <- l[sapply(l, function(i){
   }
 })] # remove all n = NA or n = NA now
 l2 <- l
-sp <- sample(unique(c(names(l1), names(l2))), 1)
+#sp <- sample(unique(c(names(l1), names(l2))), 1)
 #sp <- "Cornus rugosa"
-l1[[sp]];l2[[sp]];View(rp[SNAME == sp, ]);View(ra[SNAME == sp, ])
+#l1[[sp]];l2[[sp]];View(rp[SNAME == sp, ]);View(ra[SNAME == sp, ])
 
 ```
 
@@ -743,26 +743,25 @@ legend("topleft", inset = 0, legend = rev(gsub("S0", "SH/SX", paste0("S", 0:5)))
 [Explication des rangs](https://www.quebec.ca/gouvernement/gouvernement-ouvert/transparence-performance/indicateurs-statistiques/donnees-especes-situation-precaire/comprendre-rangs-precarite)
 
 ```{r, echo = FALSE, eval = TRUE}
+
 ra <- read_excel("RangSActuel_v2024-10-07.xlsx") |> setDT()
-#split(ra, ra$SNAME)
 names(ra)[which(names(ra) == "DATE dernière évaluation Rang S")] <- "date"
 ra[ , bd := "actuel"]
 
 rp <- read_excel("RangSPassé_v2024-10-07.xlsx") |> setDT()
-#split(rp, rp$SNAME)
 names(rp)[which(names(rp) == "Ancienne valeur")] <- "SRANK"
-names(rp)[which(names(rp) == "Date ancienne valeur")] <- "ancienne_valeur"
-names(rp)[which(names(rp) == "Date changement")] <- "date"
+names(rp)[which(names(rp) == "Date ancienne valeur")] <- "date"
+names(rp)[which(names(rp) == "Date changement")] <- "next_date"
 rp[ , bd := "passé"]
 
-keepp <- c("SNAME", "SCOMNAME", "GRANDGROUPE", "SRANK", "date", "ancienne_valeur", "bd")
-keepa <- keepp[-(length(keepp)-1)]
+keepp <- c("SNAME", "SCOMNAME", "GRANDGROUPE", "GGROUPE", "SRANK", "bd", "date", "next_date")
+keepa <- keepp[-length(keepp)]
 
 r <- rbind(ra[, ..keepa], rp[, ..keepp], fill = TRUE)
-r <- r[ ,.(SNAME, GRANDGROUPE, bd, SRANK, date, ancienne_valeur)]
+r <- r[ ,.(SNAME, GRANDGROUPE, bd, SRANK, date)]
+r <- r[order(SNAME, date, rev(bd)), ]
+
 r[ , date := as.Date(date)]
-r[ , ancienne_valeur := as.Date(ancienne_valeur)]
-r <- r[order(SNAME, -bd, date), ]
 tab <- rev(sort(table(r$SRANK)))#; tab
 l <- split(r[, -2], r$SNAME)
 tab
@@ -770,47 +769,6 @@ tab
 ```
 
 # Exemples
-
-##### 
-
-Le rang actuel est plus précaire que le dernier rang passé.
-
-```{r, echo = FALSE}
-l[["Sternotherus odoratus"]]
-```
-
-##### 
-
-Le rang actuel est moins précaire que le dernier rang passé.
-
-```{r, echo = FALSE}
-
-l[["Bromus kalmii"]]
-```
-
-##### 
-
-Le dernier rang passé et le rang actuel ne correspondent pas du tout.
-
-```{r, echo = FALSE}
-l[["Lasiurus borealis"]]
-```
-
-##### 
-
-Le rang actuel ne correspond pas à un rang passé à la même date (2008-01-21).
-
-```{r, echo = FALSE}
-l[["Erigeron hyssopifolius"]]
-```
-
-##### 
-
-On ne sait pas quel rang attribuer pour la période allant de 2004-11-19 à 2019-08-06.
-
-```{r, echo = FALSE}
-l[["Lampropeltis triangulum"]]
-```
 
 ##### 
 
@@ -838,14 +796,6 @@ l[["Dermochelys coriacea"]]
 
 ###### 
 
-Le dernier rang passé et le rang actuel ne correspondent pas et il y a une incertitude entre 2009-08-24 et 2015-03-30.
-
-```{r, echo = FALSE}
-l[["Vermivora cyanoptera"]]
-```
-
-###### 
-
 Rangs passés, mais plus de rang actuellement?
 
 ```{r, echo = FALSE}
@@ -858,9 +808,9 @@ l[["Abagrotis brunneipennis"]]
 l[["Symphyotrichum boreale"]]
 ```
 
-##### Cas aléatoires
+# Cas aléatoires
 
 ```{r, echo = FALSE}
-l[sample(names(l), 10)]
+l[sample(names(l), 150)]
 ```
 
