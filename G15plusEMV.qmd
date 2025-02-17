@@ -114,16 +114,19 @@ l <- split(r, r$SNAME) |>
       })
 
 l <- l[sapply(l, function(i){
-  #!(all(is.na(i$n)) | is.na(tail(i$n, 1)))
-  w <- which(!is.na(i$date) & !is.na(i$n))
-  if(any(w)){
-    if(nrow(unique(i[w, c("date", "n")])) < 2){
-      FALSE
+  if(is.na(i[date == Sys.Date(), ]$n)){ # remove if currently no rank
+    FALSE  
+  } else {
+    w <- which(!is.na(i$date) & !is.na(i$n))
+    if(any(w)){
+      if(nrow(unique(i[w, c("date", "n")])) < 2){
+        FALSE
+      }else{
+        TRUE
+      }
     }else{
-      TRUE
+      FALSE
     }
-  }else{
-    FALSE
   }
 })] # remove all n = NA or n = NA now
 
@@ -188,27 +191,27 @@ l <- split(r, r$SNAME) |>
       })
 
 l <- l[sapply(l, function(i){
-  #!(all(is.na(i$n)) | is.na(tail(i$n, 1)))
-  w <- which(!is.na(i$date) & !is.na(i$n))
-  if(any(w)){
-    if(nrow(unique(i[w, c("date", "n")])) < 2){
-      FALSE
+  if(is.na(i[date == Sys.Date(), ]$n)){ # remove if currently no rank
+    FALSE  
+  } else {
+    w <- which(!is.na(i$date) & !is.na(i$n))
+    if(any(w)){
+      if(nrow(unique(i[w, c("date", "n")])) < 2){
+        FALSE
+      }else{
+        TRUE
+      }
     }else{
-      TRUE
+      FALSE
     }
-  }else{
-    FALSE
   }
 })] # remove all n = NA or n = NA now
 l2 <- l
 sp <- sample(unique(c(names(l1), names(l2))), 1)
-#sp <- "Symphyotrichum boreale"
+#sp <- "Cornus rugosa"
 l1[[sp]];l2[[sp]];View(rp[SNAME == sp, ]);View(ra[SNAME == sp, ])
 
 ```
-
-
-
 
 
 
@@ -224,7 +227,7 @@ colgrid <- adjustcolor("black", 0.3)
 <br><br><br>
 
 ```{r, echo = FALSE}
-sp <- "Ambystoma laterale"
+sp <- "Haliaeetus leucocephalus"
 #sp <- sample(names(l), 1)
 com <- r[SNAME == sp, ]$SCOMNAME[1]
 spcom <- paste(sub("^(\\w)", "\\U\\1", com, perl = TRUE), "(", sp, ")")
@@ -451,7 +454,7 @@ g <- lapply(l, function(i){
   )
 }) |> rbindlist()
 g[ , rankgroup := ifelse(rankinit >= 4, "S4S5", "S0S3")]
-g[ , .(n = .N, y = mean(yearinit), ysd = sd(yearinit)), by = .(group, rankgroup)][order(group, rankgroup), ]
+#g[ , .(n = .N, y = mean(yearinit), ysd = sd(yearinit)), by = .(group, rankgroup)][order(group, rankgroup), ]
 
 gl <- lapply(split(g , by = c("group", "rankgroup")), function(i){i$species})
 gl <- gl[sort(names(gl))]
@@ -506,7 +509,7 @@ tsrank2 <- function(x, group){
   cu <- sapply(rd, function(i){
     sum(first <= i)  
   })
-  lines(as.Date(rd), scales::rescale(cu, to = c(-3, -2)), lwd = 2, col = "forestgreen")
+  lines(as.Date(rd), scales::rescale(c(0, cu), to = c(-3, -2))[-1], lwd = 2, col = "forestgreen") # rescale to 0 species to know what the start is
   ####
   
 }  
@@ -526,17 +529,111 @@ par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
 
 ```
 
+# Restrict to most species evaluated
+
+```{r, echo = FALSE, eval = TRUE, fig.width = 11, fig.height = 8}
+
+g <- lapply(l, function(i){
+  i <- i[order(i$date), ]
+  w <- which(!is.na(i$n))[1]
+  data.frame(
+    species = i$SNAME[1],
+    group = i$GGROUPE[1],
+    rankinit = i$n[w],
+    yearinit = as.integer(substr(i$date[w], 1, 4))
+  )
+}) |> rbindlist()
+g[ , rankgroup := ifelse(rankinit >= 4, "S4S5", "S0S3")]
+#g[ , .(n = .N, y = mean(yearinit), ysd = sd(yearinit)), by = .(group, rankgroup)][order(group, rankgroup), ]
+
+gl <- lapply(split(g , by = c("group", "rankgroup")), function(i){i$species})
+gl <- gl[sort(names(gl))]
 
 
-```{r, echo = FALSE, eval = TRUE}
+
+periods <- list("Invasculaires" = "2015-01-01", "Invertébrés" = "2005-01-01", "Vasculaires" = "2005-01-01", "Vertébrés" = "2000-01-01")
 
 
+
+tsrank3 <- function(x, group, date = NULL){
+  x <- x[names(x) %in% gl[[group]]]
+  xout <- seq(as.Date("1990-01-01"), Sys.Date(), by = 1)
+  plot(as.Date(0), 0, , xlim = range(xout) + c(0, 5 * 365), ylim = c(-3, 2.5), type = "n", xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+  abline(h = seq(-4, 3.5, by = 1), lty = 3, col = colgrid)
+  abline(v = vdate, lty = 3, col = colgrid)
+  axis(2, las = 2, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
+  invisible(lapply(x, function(i){
+    offset <- rnorm(1, 0, 0.10)
+    lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.10))
+    text(tail(i$date, 1) + 265, tail(offset + i$ndiff, 1), label = i$SNAME[1], cex = 0.45, adj = c(0, 0.5), xpd = TRUE, col = adjustcolor("black", 0.25))
+  }))
+  #abline(0, 0, lty = 3, col = "red")
+  #mtext(side = 1, line = 2, text = "Années", font = 2, cex = cex.text)
+  #mtext(side = 2, line = 2, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+  
+  if(length(group) == 1){
+    mtext(side = 3, line = 0, text = group, font = 2, cex = 1)
+  } else {
+    mtext(side = 3, line = 0, text = "Toutes les espèces", font = 2, cex = 1)
+  }
+  
+  ll <- invisible(lapply(seq_along(x), function(i){
+    #print(i)
+    y <- x[[i]]
+    res <- as.data.frame(approx(y$date, y$ndiff, xout = xout, ties = "ordered"))
+    names(res) <- c("date", "diff")
+    # if NA at the end, assume same value up to then
+    last_value <- tail(na.omit(res$diff), 1)  # Get the last non-NA value
+    res$diff[is.na(res$diff) & seq_along(res$diff) > max(which(!is.na(res$diff), arr.ind = TRUE))] <- last_value
+    
+    if(!is.null(date)){
+      res <- res[res$date >= date, ]
+      o <- res$diff[!is.na(res$diff)][1] # rescale to diff when subsetting
+      res$diff <- res$diff - o
+    }
+    
+    res$weight <- cumsum(ifelse(is.na(res$diff), 0, 1))
+    res
+
+  }))
+  I1 <- do.call("cbind", lapply(ll, "[[", 2)) |>
+    apply(1, mean, na.rm = TRUE)
+  I2 <- rbindlist(ll) |>
+    _[, .(diff = sum(diff * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE)), by = .(date)]
+
+  I <- I2$diff
+  lines(I2$date, I1, col = adjustcolor("red", 0.75), lwd = 6)
+  lines(I2$date, I2$diff, col = adjustcolor("gold", 0.75), lwd = 3)
+  
+  ####
+  first <- sapply(x, function(i){
+    as.character(i$date[which(!is.na(i$n))[1]])  
+  })
+  rd <- as.character(seq.Date(as.Date("1990-01-01"), Sys.Date(), by = 1))
+  cu <- sapply(rd, function(i){
+    sum(first <= i)  
+  })
+  lines(as.Date(rd), scales::rescale(c(0, cu), to = c(-3, -2))[-1], lwd = 2, col = "forestgreen") # rescale to 0 species to know what the start is
+  ####
+  
+}  
+
+par(mar = c(0, 3, 3, 0), oma = c(4, 4, 2, 1))
+layout(matrix(1:8, ncol = 4, byrow = FALSE))
+invisible(lapply(names(gl), function(i){
+  tsrank3(l, group = i, date = periods[[sapply(strsplit(i, "\\."), "[", 1)]])
+}))
+mtext(side = 1, line = 2.5, outer = TRUE, text = "Années", font = 2, cex = cex.text)
+mtext(side = 2, line = 0, outer = TRUE, text = "Différence par rapport au rang initial", font = 2, cex = cex.text)
+mtext(side = 3, line = 0, outer = TRUE, text = "Groupes et rangs initialement attribués", font = 2, cex = cex.text)
+#plot.new()
+par(oma = c(0, 0, 0, 0))
+legend("topleft", inset = 0, legend = c("Espèce", "Moy.", "Moy. pondérée"), col = c("grey50", "red", "gold"), lwd = c(1, 4, 4), text.font = 2, bty = "n", xpd = TRUE, cex = 1.25)
+par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
 
 
 ```
-
-
-
 
 
 # Nb d'années écoulée depuis le rang initial vs. l'écart par rapport à ce rang initial
@@ -760,3 +857,10 @@ l[["Abagrotis brunneipennis"]]
 ```{r, echo = FALSE}
 l[["Symphyotrichum boreale"]]
 ```
+
+##### Cas aléatoires
+
+```{r, echo = FALSE}
+l[sample(names(l), 10)]
+```
+
