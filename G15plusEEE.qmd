@@ -548,6 +548,37 @@ plot_observers <- function(x){
 
 ```
 
+# Figure finale
+
+```{r, echo = FALSE}
+
+m <- gam(cbind(n, ntot) ~ s(year, k = 3, m = 2), family = binomial, data = axxl)
+
+x <- axxl
+n <- unique(table(x$year)
+            
+
+library(ggplot2)
+
+g <- ggplot(x, aes(year, n / ntot, succ = n, fail = ntot - n)) +
+  #geom_line(linewidth = 1) +
+  geom_smooth(method = "gam", colour = "forestgreen", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 3) +
+  labs(x = "Années", y = "Nb. d'obs. / Nb. total d'obs.", title = "Évolution du taux d'observations de EEE") +
+  ylim(c(0, 0.05)) +
+  theme_light()
+g
+
+ggsave(file = "G15plus_EEE_tauxobservations.svg", plot = g, width = 5, height = 4)
+
+```
+
+
+
+
+
+
+
+
 # Taux d'observation global des espèces communes
 
 -   Proportion d'observations des 20 espèces les plus signalées

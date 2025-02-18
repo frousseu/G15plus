@@ -208,7 +208,7 @@ l <- l[sapply(l, function(i){
 })] # remove all n = NA or n = NA now
 l2 <- l
 #sp <- sample(unique(c(names(l1), names(l2))), 1)
-#sp <- "Cornus rugosa"
+#sp <- "Morone americana"
 #l1[[sp]];l2[[sp]];View(rp[SNAME == sp, ]);View(ra[SNAME == sp, ])
 
 ```
@@ -565,7 +565,7 @@ tsrank3 <- function(x, group, date = NULL){
   axis.Date(1, mgp = mgp, tcl = tcl, cex.axis = 1, col = "transparent")
   invisible(lapply(x, function(i){
     offset <- rnorm(1, 0, 0.10)
-    lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.10))
+    lines(i$date, offset + i$ndiff, ylim = c(0, 5), lwd = 1, col = adjustcolor("black", 0.05))
     text(tail(i$date, 1) + 265, tail(offset + i$ndiff, 1), label = i$SNAME[1], cex = 0.45, adj = c(0, 0.5), xpd = TRUE, col = adjustcolor("black", 0.25))
   }))
   #abline(0, 0, lty = 3, col = "red")
@@ -603,6 +603,9 @@ tsrank3 <- function(x, group, date = NULL){
     _[, .(diff = sum(diff * weight, na.rm = TRUE) / sum(weight, na.rm = TRUE)), by = .(date)]
 
   I <- I2$diff
+  
+  abline(0, 0, col = "green")
+  
   lines(I2$date, I1, col = adjustcolor("red", 0.75), lwd = 6)
   lines(I2$date, I2$diff, col = adjustcolor("gold", 0.75), lwd = 3)
   
@@ -617,11 +620,14 @@ tsrank3 <- function(x, group, date = NULL){
   lines(as.Date(rd), scales::rescale(c(0, cu), to = c(-3, -2))[-1], lwd = 2, col = "forestgreen") # rescale to 0 species to know what the start is
   ####
   
+  data.frame(group = group, date = I2$date, diff = I1)
+  
+  
 }  
 
 par(mar = c(0, 3, 3, 0), oma = c(4, 4, 2, 1))
 layout(matrix(1:8, ncol = 4, byrow = FALSE))
-invisible(lapply(names(gl), function(i){
+invisible(dats <- lapply(names(gl), function(i){
   tsrank3(l, group = i, date = periods[[sapply(strsplit(i, "\\."), "[", 1)]])
 }))
 mtext(side = 1, line = 2.5, outer = TRUE, text = "Années", font = 2, cex = cex.text)
@@ -634,6 +640,40 @@ par(mfrow = c(1, 1), mar = c( 4, 4, 3.5, 3.5), oma = c(0, 0, 0, 0))
 
 
 ```
+
+# Figure finale
+
+```{r, echo = FALSE, eval = TRUE, fig.width = 11, fig.height = 8}
+x <- do.call("rbind", dats)
+add <- strsplit(x$group, "\\.") |>
+               do.call("rbind", args = _) |>
+               as.data.frame()
+names(add) <- c("group", "rank")
+x <- cbind(add, x[, -1])
+x$group <- factor(x$group, levels = c("Vertébrés", "Invertébrés", "Vasculaires", "Invasculaires"))
+
+library(ggplot2)
+
+g <- ggplot(x, aes(date, diff)) +
+  #geom_line(linewidth = 2) +
+  geom_smooth(colour = "forestgreen", linewidth = 3) +
+  facet_grid(cols = vars(group), rows = vars(rank), scales = "fixed") +
+  ylim(c(-0.5, 0.5)) +
+  labs(x = "Années", y = "Différence par rapport au rang initialement attribué", title = "Évolution des rangs de précarité") +
+  theme_light()
+
+#g <- ggplot(x, aes(date, diff, colour = rank)) +
+#  geom_line(linewidth = 2) +
+#  geom_smooth(aes(group = rank, colour = rank), colour = "forestgreen") +
+#  facet_grid(cols = vars(group), scales = "fixed") +
+#  ylim(c(-0.5, 0.5)) +
+#  labs(x = "Années", y = "Différence par rapport au rang initialement attributé", title = "Évolution des rangs de précarité") +
+#  theme_light()
+
+ggsave(file = "G15plus_EMV_précarité.png", plot = g, width = 10, height = 6)
+
+```
+
 
 
 # Nb d'années écoulée depuis le rang initial vs. l'écart par rapport à ce rang initial
