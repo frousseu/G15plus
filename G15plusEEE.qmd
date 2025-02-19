@@ -555,7 +555,7 @@ plot_observers <- function(x){
 m <- gam(cbind(n, ntot) ~ s(year, k = 3, m = 2), family = binomial, data = axxl)
 
 x <- axxl
-n <- unique(table(x$year)
+n <- unique(table(x$year))
             
 
 library(ggplot2)
@@ -582,7 +582,45 @@ g <- ggplot(x, aes(year, n / ntot, succ = n, fail = ntot - n)) +
     )
 g
 
-ggsave(file = "G15plus_EEE_tauxobservations.png", plot = g, width = 6, height = 4, dpi = 300)
+
+
+
+
+
+g <- ggplot(x, aes(year, n / ntot, succ = n, fail = ntot - n)) +
+  #geom_line(linewidth = 1) +
+  geom_smooth(method = "gam", colour = "forestgreen", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 1.5) +
+  labs(x = "Années", y = "% d'obs. de EEE sur le nb. total d'obs.") +
+  #ylim(c(0, 0.05)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.05)) +
+theme_minimal() +
+  theme(
+    text = element_text(family = "Arial"),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.grid.major = element_line(color = "gray80"),  
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(size = 11, margin = margin(t = 12), family = "Arial"),  
+    axis.title.y = element_text(size = 11, margin = margin(r = 12), family = "Arial"),  
+    axis.text = element_text(size = 11, family = "Arial"),  
+    legend.position = "right",  
+    legend.title = element_text(size = 8, family = "Arial"),  
+    legend.text = element_text(size = 8, family = "Arial"),
+    panel.border = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1),
+  )
+
+g
+
+
+
+
+
+
+
+
+
+ggsave(file = "G15plus_EEE_tauxobservations.svg", plot = g, width = 575, height = 360,  units = "px", dpi = 100)
 
 ```
 

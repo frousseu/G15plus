@@ -651,8 +651,10 @@ add <- strsplit(x$group, "\\.") |>
 names(add) <- c("group", "rank")
 x <- cbind(add, x[, -1])
 x$group <- factor(x$group, levels = c("Vertébrés", "Invertébrés", "Vasculaires", "Invasculaires"))
-x$rank <- gsub("S0S3", "S0 - S3", x$rank)
-x$rank <- gsub("S4S5", "S4 - S5", x$rank)
+x$rank <- gsub("S0S3", "précaires", x$rank)
+x$rank <- gsub("S4S5", "non précaires", x$rank)
+x$grouprank <- factor(paste(x$group, x$rank), levels = paste(levels(x$group)[rep(1:4, each = 2)], unique(x$rank)[c(2, 1)]))
+
 
 library(ggplot2)
 
@@ -662,19 +664,52 @@ g <- ggplot(x, aes(date, diff)) +
   facet_grid(cols = vars(group), rows = vars(rank), scales = "fixed") +
   ylim(c(-0.5, 0.5)) +
   labs(x = "Années", y = "Différence par rapport au rang initialement attribué", title = "Évolution des rangs de précarité des espèces") +
-  theme_minimal(base_family = "Arial") +
+  theme_light(base_family = "Arial") +
     theme(
-        panel.background = element_rect(fill = "#2d303c", color = NA),
-        plot.background = element_rect(fill = "#2d303c", color = NA),
         panel.grid.major = element_line(color = "#858b88"),
-        panel.grid.minor = element_line(color = "#858b88"),
-        axis.text = element_text(color = "#858b88"),
-        axis.title = element_text(color = "#e4eedd"),
-        plot.title = element_text(color = "#e4eedd"),
-        strip.text = element_text(color = "#e4eedd"),
-        legend.text = element_text(color = "#e4eedd"),
-        legend.title = element_text(color = "#e4eedd")
+        panel.grid.minor = element_line(color = "#858b88")
     )
+
+g
+
+
+
+cols <-  palette.colors(8, "Paired")
+cols <- cols[c(1, 2, 5, 6, 3, 4, 7, 8)]
+
+g <- ggplot(x, aes(date, diff, group = grouprank, colour = grouprank)) +
+  #geom_line() +
+  geom_smooth(linewidth = 1.5, se = FALSE) +
+  ylim(c(-0.5, 0.5)) +
+  labs(
+    x = "Années", 
+    y = "Différence par rapport au 1er rang attribué",
+    color = "Groupe d'espèces"
+  ) +
+  #scale_color_brewer(palette = "Paired") +  # Custom palette
+  scale_color_manual(values = cols) +  # Custom palette
+  #theme_bw(base_family = "Arial") +
+theme_minimal() +
+  theme(
+    text = element_text(family = "Arial"),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.grid.major = element_line(color = "gray80"),  
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(size = 11, margin = margin(t = 12), family = "Arial"),  
+    axis.title.y = element_text(size = 11, margin = margin(r = 12), family = "Arial"),  
+    axis.text = element_text(size = 11, family = "Arial"),  
+    legend.position = "right",  
+    legend.title = element_text(size = 8, family = "Arial"),  
+    legend.text = element_text(size = 8, family = "Arial"),
+    panel.border = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1),
+  )
+
+
+g
+
+
 
 #g <- ggplot(x, aes(date, diff, colour = rank)) +
 #  geom_line(linewidth = 2) +
@@ -684,7 +719,7 @@ g <- ggplot(x, aes(date, diff)) +
 #  labs(x = "Années", y = "Différence par rapport au rang initialement attributé", title = "Évolution des rangs de précarité") +
 #  theme_light()
 
-ggsave(file = "G15plus_EMV_précarité.svg", plot = g, width = 10, height = 6)
+ggsave(file = "G15plus_EMV_précarité.svg", plot = g, width = 575, height = 360,  units = "px", dpi = 100)
 
 ```
 
