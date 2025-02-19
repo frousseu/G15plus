@@ -562,13 +562,27 @@ library(ggplot2)
 
 g <- ggplot(x, aes(year, n / ntot, succ = n, fail = ntot - n)) +
   #geom_line(linewidth = 1) +
-  geom_smooth(method = "gam", colour = "forestgreen", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 3) +
-  labs(x = "Années", y = "Nb. d'obs. / Nb. total d'obs.", title = "Évolution du taux d'observations de EEE") +
-  ylim(c(0, 0.05)) +
-  theme_light()
+  geom_smooth(method = "gam", colour = "#3770C5", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 2) +
+  labs(x = "Années", y = "% d'obs. de EEE sur le nb. total d'obs.", title = "Évolution du taux d'observation des EEE", subtitle = "(EEE = espèces exotiques envahissantes)") +
+  #ylim(c(0, 0.05)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 0.05)) +
+  theme_minimal(base_family = "Arial") +
+    theme(
+        panel.background = element_rect(fill = "#2d303c", color = NA),
+        plot.background = element_rect(fill = "#2d303c", color = NA),
+        panel.grid.major = element_line(color = "#858b88"),
+        panel.grid.minor = element_line(color = "#858b88"),
+        axis.text = element_text(color = "#858b88"),
+        axis.title = element_text(color = "#e4eedd"),
+        plot.title = element_text(color = "#e4eedd"),
+        plot.subtitle = element_text(color = "#e4eedd"),
+        strip.text = element_text(color = "#e4eedd"),
+        legend.text = element_text(color = "#e4eedd"),
+        legend.title = element_text(color = "#e4eedd")
+    )
 g
 
-ggsave(file = "G15plus_EEE_tauxobservations.svg", plot = g, width = 5, height = 4)
+ggsave(file = "G15plus_EEE_tauxobservations.png", plot = g, width = 6, height = 4, dpi = 300)
 
 ```
 

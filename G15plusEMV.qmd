@@ -651,16 +651,30 @@ add <- strsplit(x$group, "\\.") |>
 names(add) <- c("group", "rank")
 x <- cbind(add, x[, -1])
 x$group <- factor(x$group, levels = c("Vertébrés", "Invertébrés", "Vasculaires", "Invasculaires"))
+x$rank <- gsub("S0S3", "S0 - S3", x$rank)
+x$rank <- gsub("S4S5", "S4 - S5", x$rank)
 
 library(ggplot2)
 
 g <- ggplot(x, aes(date, diff)) +
   #geom_line(linewidth = 2) +
-  geom_smooth(colour = "forestgreen", linewidth = 3) +
+  geom_smooth(colour = "#3770C5", linewidth = 2) +
   facet_grid(cols = vars(group), rows = vars(rank), scales = "fixed") +
   ylim(c(-0.5, 0.5)) +
-  labs(x = "Années", y = "Différence par rapport au rang initialement attribué", title = "Évolution des rangs de précarité") +
-  theme_light()
+  labs(x = "Années", y = "Différence par rapport au rang initialement attribué", title = "Évolution des rangs de précarité des espèces") +
+  theme_minimal(base_family = "Arial") +
+    theme(
+        panel.background = element_rect(fill = "#2d303c", color = NA),
+        plot.background = element_rect(fill = "#2d303c", color = NA),
+        panel.grid.major = element_line(color = "#858b88"),
+        panel.grid.minor = element_line(color = "#858b88"),
+        axis.text = element_text(color = "#858b88"),
+        axis.title = element_text(color = "#e4eedd"),
+        plot.title = element_text(color = "#e4eedd"),
+        strip.text = element_text(color = "#e4eedd"),
+        legend.text = element_text(color = "#e4eedd"),
+        legend.title = element_text(color = "#e4eedd")
+    )
 
 #g <- ggplot(x, aes(date, diff, colour = rank)) +
 #  geom_line(linewidth = 2) +
@@ -670,7 +684,7 @@ g <- ggplot(x, aes(date, diff)) +
 #  labs(x = "Années", y = "Différence par rapport au rang initialement attributé", title = "Évolution des rangs de précarité") +
 #  theme_light()
 
-ggsave(file = "G15plus_EMV_précarité.png", plot = g, width = 10, height = 6)
+ggsave(file = "G15plus_EMV_précarité.svg", plot = g, width = 10, height = 6)
 
 ```
 
