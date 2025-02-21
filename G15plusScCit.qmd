@@ -1,0 +1,128 @@
+---
+title: "G15+ / Participation aux sciences citoyennes"
+author: ""
+format: 
+   html:
+     fig-width: 10
+     fig-height: 7
+     out-width: 100%
+     page-layout: full
+     self-contained: true
+     toc: true
+     css: styles.css
+resources:
+  - sscripts.js
+editor: visual
+editor_options: 
+  chunk_output_type: console
+execute:
+  cache: false 
+---
+
+```{css, echo = FALSE, eval = FALSE}
+
+.quarto-document img {
+  width: 100%;
+  height: auto;  /* Preserves aspect ratio */
+  max-width: 100%;
+}
+
+h1 {
+  margin-top: 25vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+h2 {
+  margin-top: 5vh;
+  margin-bottom: 0vh;
+  padding-bottom: 0vh;
+}
+
+code.r{
+  font-size: 20px;
+}
+pre {
+  font-size: 20px;
+}
+
+```
+
+```{r, echo = FALSE, message = FALSE}
+library(ggplot2)
+library(plotly)
+library(scales)
+
+source("https://object-arbutus.cloud.computecanada.ca/bq-io/atlas/parquet/bq-atlas-parquet.R")
+atlas <- duckdbfs::open_dataset("/home/frousseu/Documents/github/niches_climatiques/atlas_2024-11-07.parquet", tblname = "atlas")
+
+sc <- c("EOD – eBird Observation Dataset", "Atlas des Oiseaux Nicheurs du Québec", "iNaturalist Research-grade Observations", "Pl@ntNet automatically identified occurrences", "eButterfly Surveys", "Great Backyard Bird Count", "eButterfly", "Breeding birds survey North America", "Pl@ntNet observations", "Monarch Watch", "Xeno-canto - Bird sounds from around the world", "Observation.org, Nature data from around the World", "Ontario Breeding Bird Atlas 2001-2005", "Mycoblitz 2017 - IRBV et Cercle des Mycologues de Montréal")
+
+atlas |>
+  head() |>
+  collect() |>
+  as.data.frame()
+
+
+x <- atlas |> 
+  filter(within_quebec) |>
+  group_by(dataset_name) |>
+  summarize(n = n()) |>
+  arrange(-n) |>
+  collect() |>
+  as.data.frame()
+x[101:200,-2] 
+
+
+x <- atlas |> 
+  filter(within_quebec == TRUE) |>
+  filter(dataset_name %in% sc) |>
+  group_by(year_obs) |>
+  summarize(n = n()) |>
+  arrange(year_obs) |>
+  collect() |>
+  as.data.frame()
+ 
+g <- ggplot(x, aes(year_obs, n)) +
+  geom_line(linewidth = 1.5, colour = "forestgreen") +
+  labs(x = "Années", y = "Nombres d'observations (en millions)") +
+  #xlim(c(0, 0.05)) +
+  scale_x_continuous(limits = c(1970, 2021)) +
+  scale_y_continuous(labels = unit_format(unit = "M", scale = 1e-6)) +
+theme_minimal() +
+  theme(
+    text = element_text(family = "Arial"),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    panel.grid.major = element_line(color = "gray80"),  
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(size = 11, margin = margin(t = 12), family = "Arial"),  
+    axis.title.y = element_text(size = 11, margin = margin(r = 12), family = "Arial"),  
+    axis.text = element_text(size = 11, family = "Arial"),  
+    legend.position = "right",  
+    legend.title = element_text(size = 8, family = "Arial"),  
+    legend.text = element_text(size = 8, family = "Arial"),
+    panel.border = element_blank(),
+    axis.line = element_line(color = "black", linewidth = 1),
+  )
+g
+
+
+g <- ggplotly(g)
+json <- plotly_json(g, pretty = TRUE)  
+writeLines(json$x$data, "G15plus_ScCit.json")
+
+
+
+
+ggsave(file = "G15plus_ScCit.png", plot = g, width = 575, height = 360,  units = "px", dpi = 100)
+
+
+# Les sciences citoyennes contribuent aux données de biodiversité depuis de nombreuses années, mais on note une croissance exponentielle des observations ces dernières années. La participation accrue du public ces dernières années est certainement facilitée par la multiplication des plateformes et des outils technologiques.
+
+# L'indicateur représente le nombre de données d'observation de biodiversité associé aux bases de données de sciences citoyennes répertoriée dans la base de données Atlas de Biodiversité Québec.
+
+
+
+```
+

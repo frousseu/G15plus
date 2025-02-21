@@ -55,6 +55,8 @@ pre {
 library(readxl)
 library(data.table)
 library(mgcv)
+library(ggplot2)
+library(plotly)
 
 options(width = 150)
 options(datatable.print.class = FALSE)
@@ -656,8 +658,6 @@ x$rank <- gsub("S4S5", "non précaires", x$rank)
 x$grouprank <- factor(paste(x$group, x$rank), levels = paste(levels(x$group)[rep(1:4, each = 2)], unique(x$rank)[c(2, 1)]))
 
 
-library(ggplot2)
-
 g <- ggplot(x, aes(date, diff)) +
   #geom_line(linewidth = 2) +
   geom_smooth(colour = "#3770C5", linewidth = 2) +
@@ -709,7 +709,9 @@ theme_minimal() +
 
 g
 
-
+g <- ggplotly(g)
+json <- plotly_json(g, pretty = TRUE)  
+writeLines(json$x$data, "G15plus_EMV_precarite.json")
 
 #g <- ggplot(x, aes(date, diff, colour = rank)) +
 #  geom_line(linewidth = 2) +
@@ -719,7 +721,7 @@ g
 #  labs(x = "Années", y = "Différence par rapport au rang initialement attributé", title = "Évolution des rangs de précarité") +
 #  theme_light()
 
-ggsave(file = "G15plus_EMV_précarité.svg", plot = g, width = 575, height = 360,  units = "px", dpi = 100)
+ggsave(file = "G15plus_EMV_precarite.svg", plot = g, width = 575, height = 360,  units = "px", dpi = 100)
 
 ```
 

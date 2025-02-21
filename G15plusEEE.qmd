@@ -589,7 +589,7 @@ g
 
 g <- ggplot(x, aes(year, n / ntot, succ = n, fail = ntot - n)) +
   #geom_line(linewidth = 1) +
-  geom_smooth(method = "gam", colour = "forestgreen", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 1.5) +
+  geom_smooth(method = "gam", colour = "forestgreen", formula = cbind(succ, fail) ~ s(x, k = 3, m = 2), method.args = list(family = "binomial"), linewidth = 1.5, se = FALSE) +
   labs(x = "Années", y = "% d'obs. de EEE sur le nb. total d'obs.") +
   #ylim(c(0, 0.05)) +
   scale_y_continuous(labels = scales::percent, limits = c(0, 0.05)) +
@@ -615,7 +615,9 @@ g
 
 
 
-
+g <- ggplotly(g)
+json <- plotly_json(g, pretty = TRUE)  
+writeLines(json$x$data, "G15plus_EEE_tauxobservations.json")
 
 
 
