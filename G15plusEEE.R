@@ -401,6 +401,7 @@ plotsp <- function(sp){
 
 spe <- eeengbif$species[1:24]
 spe <- c("Lymantria dispar", "Aglais io", "Vanessa atalanta", "Procyon lotor", "Odocoileus virginianus", "Trillium erectum", "Nymphalis antiopa", "Papilio canadensis", "Sciurus carolinensis")
+spe <- c("Procyon lotor", "Odocoileus virginianus", "Didelphis virginiana", "Tamiasciurus hudsonicus", "Tamias striatus", "Danaus plexippus")
 par(mfrow = n2mfrow(length(spe)), mar = c(0, 3, 0, 0), oma = c(4, 4, 4, 4))
 lapply(spe, function(i){
   plotsp(i)
